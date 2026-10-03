@@ -719,11 +719,22 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         pluginCtx = ctx;
         localize(ctx);
-        ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
-          name: 'conversation.input.left',
-          id: 'peak-badge',
-          order: 20,
-        }, Main));
+        // The `try` matters even though this is the plugin's own mount path: an
+        // `apply` that throws takes the whole entry down, and a slot can be
+        // *declared by another package* whose entry is not active (the settings
+        // shell and the conversation columns are both disableable), in which case
+        // `inject` never fires. A chip that fails to appear is a bad outcome; a
+        // plugin that fails to apply because of it is a worse one, and it is the
+        // kind of failure that shows up as "this plugin broke that plugin".
+        try {
+          ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
+            name: 'conversation.input.left',
+            id: 'peak-badge',
+            order: 20,
+          }, Main));
+        } catch (error) {
+          console.error('[peak-badge] the composer seat could not be registered', error);
+        }
       },
     };
   },

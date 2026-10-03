@@ -23,7 +23,7 @@
 
 ## 装
 
-需要 DSH（DeepSeek Harness）桌面端或 Web 端。
+需要 DSH（DeepSeek Harness）。开发和验证是在 `@deepseek-ai/dsh@0.2.0-rc.2` 上做的。
 
 **方式一：命令行**（推荐，能自动热加载）
 
