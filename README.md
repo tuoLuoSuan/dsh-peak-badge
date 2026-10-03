@@ -2,9 +2,24 @@
 
 点一下就知道现在 DeepSeek 是按**高峰价**还是**空闲价**计费。
 
+![输入框工具行最左边的胶囊](docs/composer.png)
+
 组件是一个小胶囊（chip），挂在输入框工具行的最左边（`conversation.input.left`）。
 胶囊左边一个小圆点，颜色跟着状态走：高峰是琥珀色，空闲是中性色。
 点开是一张小卡片，写着当前状态、计费方式、下次切换的时间和倒计时，以及此刻**为什么**是这个状态。
+
+两个状态和浅色/深色主题各来一张（图片是渲染出来的，不是画的，见
+[截图是怎么来的](#截图是怎么来的)）：
+
+| 空闲（默认） | 高峰 | 深色主题 |
+|---|---|---|
+| ![空闲](docs/chip.png) | ![高峰](docs/chip-peak.png) | ![深色](docs/chip-dark.png) |
+
+点开的卡片，三个变体——中文空闲、中文高峰、英文空闲：
+
+| 中文 · 空闲 | 中文 · 高峰 | English · off-peak |
+|---|---|---|
+| ![卡片：中文空闲](docs/card-off.png) | ![卡片：中文高峰](docs/card-peak.png) | ![卡片：英文](docs/card-en.png) |
 
 ## 计费规则
 
@@ -25,31 +40,31 @@
 
 需要 DSH（DeepSeek Harness）。开发和验证是在 `@deepseek-ai/dsh@0.2.0-rc.2` 上做的。
 
-**方式一：命令行**（推荐，能自动热加载）
-
-```
-dsh plugin --profile <你的 profile 名> add @tuoluosuan/dsh-peak-badge
-```
-
-profile 名就是侧栏「工作区」对应的那个（桌面端默认 `desktop`）。**方式二：直接从仓库装**（不经过 npm，跟着 `main` 分支走）
+**方式一：直接从仓库装**（推荐，跟着 `main` 分支走，不经过 npm）
 
 ```
 dsh plugin --profile desktop add github:tuoLuoSuan/dsh-peak-badge
 ```
 
+profile 名就是侧栏「工作区」对应的那个（桌面端默认 `desktop`）。
+
 **方式二：在对话里让 DSH 自己装**
 
 ```
-plugin_manager action: install_bundle target: @tuoluosuan/dsh-peak-badge
+plugin_manager action: install_bundle target: github:tuoLuoSuan/dsh-peak-badge
 ```
 
-**方式三：本地开发**
+**方式三：本地开发**（克隆下来直接指目录）
 
 ```
 plugin_manager action: install_bundle target: D:\path\to\dsh-peak-badge
 ```
 
-`target` 接受包名（可带版本）、git 地址、tarball 或本地绝对路径，所以从克隆下来的目录直接装也行。
+`target` 接受包名（可带版本）、git 地址、tarball 或本地绝对路径。
+
+> npm 上还没有这个包（`@tuoluosuan/dsh-peak-badge` 已经打好包，但发布那一步卡在
+> 账号的 2FA 上，暂时没发）。所以上面没有 `add @tuoluosuan/dsh-peak-badge` 这一行；
+> 等发上去了再加。
 
 装完刷新页面。**替换已装版本需要重启**才能加载新代码（热加载只覆盖新装的 bundle）。
 
@@ -60,7 +75,7 @@ plugin_manager action: list_bundles
 plugin_manager action: remove_bundle target: @tuoluosuan/dsh-peak-badge
 ```
 
-`list_plugins` 里应该能看到 `@tuoluosuan/dsh-peak-badge` 且 `fiberPhase: active`。
+`list_plugins` 里应该能看到这个包且 `fiberPhase: active`。
 
 ## 自己验一遍（推荐）
 
@@ -159,6 +174,7 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 | `index.js` | 宿主半边，空的 |
 | `client.js` | 全部功能：策略 + 渲染 |
 | `verify-policy.mjs` | 上面那个能跑的证明 |
+| `demo/` | 截图用的页面与渲染脚本（`node demo/shoot.mjs`），产物在 `docs/` |
 | `locale/{en,zh}.json` | 插件列表里显示的名字和说明（`meta.title` / `meta.description`） |
 | `icon.svg` | 插件列表里的图标，`currentColor`，跟随主题 |
 
@@ -269,6 +285,35 @@ policy 交出 `reasonParams`，text 拿模板去填；分开验时两边喂的�
 把整条路走一遍：`reasonSentence(peakState(那一刻))`，再顺手扫一遍所有可能出现的理由键，
 确认没有任何 `{...}` 残留。往这个文件里加东西时，
 「新加一条断言」比「多看一眼」便宜得多——理由见上面那个引用块。
+
+## 截图是怎么来的
+
+上面那些图不是画出来的，是渲染出来的——所以它们不会和代码说的不一样：
+
+```
+node demo/shoot.mjs
+```
+
+`demo/index.html` 是一个**真的**页面：拿真 DOM 拼出胶囊和卡片，样式则是从 `client.js` 的
+`#region styles` 里**切出来的真 CSS**（连主题令牌都换成了官方主题里解析出来的值）。
+`demo/shoot.mjs` 用无头 Edge 打开它，按元素裁剪，写进 `docs/`。
+
+几个已经踩过的坑，改这个脚本之前值得知道：
+
+- **`--screenshot` 不能用来截组件。** 它截整屏，要手算留白，而且在脚本跑完之前就开火——
+  于是会产出一张「空白但看起来像成功了」的图。改成用 DevTools Protocol 的
+  `Page.captureScreenshot`，裁剪框从 `getBoundingClientRect()` 拿。
+- **切 CSS 要认准 `const CSS = \`` 这个锚点**，不能取 `#region styles` 里的第一个反引号：
+  那段开头是 `const STYLE_TAG_ID = \`${PACKAGE_ID}/styles\`;`，按第一个反引号切会把半个
+  插件塞进 `<style>`，每条规则都失效，页面退化成裸标签。
+- **注入的 `<style>` 必须放在 `<meta charset="utf-8">` 之后。** 放在 `<head>` 之后（也就是
+  charset 之前）时，解析器还在预扫描编码声明，插件里的中文注释先到了——整段 CSS 用别的
+  编码解出来，`display` 不成立，组件量出来是 0×0，看上去却像渲染成功了。
+- **裁剪 `?view=chip` / `?view=card` 时不能把 `.composer` 藏起来**，胶囊就在它里面；
+  藏了它，胶囊跟着一起没，同样是 0×0 的空白图。只藏输入行里**别的**东西。
+- **别用 `?inlined=1` 这种由调用方传的开关**来判断样式有没有内联：调用方忘了传，
+  截图照样成功、照样空白。改成检测 DOM 里有没有那个 `<style>`。
+  这和 `verify-policy.mjs` 的底线检查是一回事：**让失败看起来像成功**，是最贵的一种 bug。
 
 ## License
 

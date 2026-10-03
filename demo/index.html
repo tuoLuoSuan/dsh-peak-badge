@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>dsh-peak-badge demo</title>
+<style>
+  /* Stand-ins for the DSH theme tokens the component reads. Values are the
+     resolved light/dark pairs of the shipped theme
+     (dsh-client-ui-theme/lib/client.js: body{--dsw-static-*…} plus the alias
+     table). Only the palette is faked here — the component's own rules are the
+     real ones, sliced out of client.js. */
+  :root {
+    --dsw-alias-bg-base: #ffffff;
+    --dsw-alias-bg-layer-1: #ffffff;
+    --dsw-alias-bg-layer-2: #ffffff;
+    --dsw-alias-bg-overlay: #e9ecf2;
+    --dsw-alias-border-l1: #0000000a;
+    --dsw-alias-border-l2: #0000001a;
+    --dsw-alias-label-primary: #0f1115;
+    --dsw-alias-label-secondary: #61666b;
+    --dsw-alias-label-tertiary: #81858c;
+    --dsw-alias-label-caption: #adb2b8;
+    --dsw-alias-state-warn-primary: #f59e0b;
+    --dsw-font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  body[data-theme="dark"] {
+    --dsw-alias-bg-base: #1b1b1c;
+    --dsw-alias-bg-layer-1: #232324;
+    --dsw-alias-bg-layer-2: #2c2c2e;
+    --dsw-alias-bg-overlay: #61666b;
+    --dsw-alias-border-l1: #ffffff0f;
+    --dsw-alias-border-l2: #ffffff1f;
+    --dsw-alias-label-primary: #f9fafb;
+    --dsw-alias-label-secondary: #cfd3d6;
+    --dsw-alias-label-tertiary: #adb2b8;
+    --dsw-alias-label-caption: #979da6;
+    --dsw-alias-state-warn-primary: #f59e0b;
+  }
+
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--dsw-alias-bg-base);
+    color: var(--dsw-alias-label-primary);
+    font: 13px/1.6 var(--dsw-font-family);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* The composer row the chip actually lives in, in miniature: the real seat is
+     `conversation.input.left`, i.e. the left end of the composer's tool row. */
+  .composer {
+    width: 620px; margin: 0 auto; padding: 10px 12px 12px; box-sizing: border-box;
+    border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px;
+    background: var(--dsw-alias-bg-layer-1);
+  }
+  .composer-text { min-height: 52px; color: var(--dsw-alias-label-tertiary); font-size: 14px; }
+  .composer-tools { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .composer-tools .spacer { flex: 1; }
+  .pill {
+    height: 24px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px;
+    border-radius: 999px; color: var(--dsw-alias-label-secondary); font-size: 12px;
+  }
+  .pill-plain { color: var(--dsw-alias-label-caption); }
+  .circle {
+    width: 24px; height: 24px; border-radius: 50%; corner-shape: round;
+    background: var(--dsw-alias-label-primary); opacity: .9;
+  }
+
+  /* Shot framing: `?view=chip` and `?view=card` crop to the component.
+     Only the composer's OTHER parts are hidden. Hiding `.composer` itself takes
+     the chip with it — the seat is inside that element, so the chip measured
+     0×0 and every shot came out blank while the DOM looked perfect.
+     The stage stays a block on purpose: as an inline-flex it shrink-wraps the
+     zero-width seat and the card's absolute position has nothing to hang off.
+     The card opens upward, so the card view pads the top to leave it room. */
+  body[data-view="chip"] .composer-text,
+  body[data-view="chip"] .composer-tools > .pill,
+  body[data-view="chip"] .composer-tools > .circle,
+  body[data-view="card"] .composer-text,
+  body[data-view="card"] .composer-tools > .pill,
+  body[data-view="card"] .composer-tools > .circle { display: none; }
+  body[data-view="chip"] .composer,
+  body[data-view="card"] .composer {
+    width: auto; margin: 0; padding: 0; border: 0; background: none;
+  }
+  body[data-view="chip"] .composer-tools,
+  body[data-view="card"] .composer-tools { margin-top: 0; }
+  body[data-view="chip"] .stage { padding: 50px 0 0 50px; }
+  /* The card is taller than it looks: the "next switch" row wraps to two lines
+     in Chinese, so 130px of headroom cut the first two rows off the top of the
+     frame. 240px clears the tallest state. */
+  body[data-view="card"] .stage { padding: 240px 0 0 50px; }
+</style>
+<script>
+  // The component's own stylesheet comes from client.js so these images cannot
+  // drift away from what the plugin ships. A browser refuses `fetch` on a
+  // `file://` page (CORS), so the screenshot harness writes a copy of this page
+  // with the CSS inlined and `?inlined=1`; only a person opening the file
+  // directly takes the fetch path.
+  window.__componentCss = async function componentCss() {
+    // The harness writes a copy of this page with the stylesheet already in the
+    // document. Detecting that beats trusting a query flag: a flag the caller
+    // forgets means a blank shot that still looks like a successful render.
+    if (document.querySelector('style[data-demo-from="client.js"]') !== null) return;
+    const source = await (await fetch('../client.js')).text();
+    const start = source.indexOf('// #region styles');
+    const end = source.indexOf('// #endregion', start);
+    if (start < 0 || end < 0) throw new Error('the styles region is missing from client.js');
+    // Anchor on `const CSS = ` and not on the region's first backtick: the first
+    // backticks in the region belong to `const STYLE_TAG_ID = \`${PACKAGE_ID}/styles\`;`.
+    const region = source.slice(start, end);
+    const anchor = 'const CSS = `';
+    const at = region.indexOf(anchor);
+    const close = region.indexOf('`;', at + anchor.length);
+    if (at < 0 || close < 0) throw new Error('the CSS template literal is missing from client.js');
+    const tag = document.createElement('style');
+    tag.setAttribute('data-demo-from', 'client.js');
+    tag.textContent = region.slice(at + anchor.length, close);
+    document.head.append(tag);
+  };
+</script>
+</head>
+<body data-theme="light" data-view="composer" data-state="off" data-lang="zh">
+  <main class="stage">
+    <section class="composer">
+      <div class="composer-text">问点什么，或者 / 调命令</div>
+      <div class="composer-tools">
+        <span class="pill pill-plain">＋</span>
+        <span id="seat"></span>
+        <span class="spacer"></span>
+        <span class="pill">DeepSeek-V4-Flash Max</span>
+        <span class="circle"></span>
+      </div>
+    </section>
+  </main>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const theme = params.get('theme') === 'dark' ? 'dark' : 'light';
+  const view = ['chip', 'card'].includes(params.get('view')) ? params.get('view') : 'composer';
+  const peak = params.get('state') === 'peak';
+  const en = params.get('lang') === 'en';
+  document.body.dataset.theme = theme;
+  document.body.dataset.view = view;
+  document.body.dataset.state = peak ? 'peak' : 'off';
+  document.body.dataset.lang = en ? 'en' : 'zh';
+  document.documentElement.lang = en ? 'en' : 'zh-CN';
+
+  // Wording copied from TEXT_ZH / TEXT_EN in client.js. The demo is a still
+  // image of two states, so the copy lives here rather than being re-derived;
+  // `verify-policy.mjs` is what guards the real sentences.
+  const COPY = {
+    zh: {
+      peak: '峰时', off: '谷时', title: 'DeepSeek 峰谷时段', state: '当前',
+      discount: '计费', next: '下次切换', schedule: '高峰时段',
+      weekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+      rateStandard: '标准价', rateOffPeak: '5 折 · 半价',
+      peakReason: '工作日高峰时段，当前按标准价计价。',
+      offReason: '工作日非高峰时段，当前按空闲时段计价。',
+    },
+    en: {
+      peak: 'Peak', off: 'Off-peak', title: 'DeepSeek peak / off-peak', state: 'Now',
+      discount: 'Rate', next: 'Next switch', schedule: 'Peak hours',
+      weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      rateStandard: 'standard rate', rateOffPeak: '50% · half price',
+      peakReason: 'Peak window on a working day, currently billed at the standard rate.',
+      offReason: 'Off-peak window on a working day, currently billed at the off-peak rate.',
+    },
+  }[en ? 'en' : 'zh'];
+
+  // 2026-08-19 is a Wednesday; 10:00 Beijing is peak, 15:30 is off-peak.
+  const SAMPLE = peak
+    ? { label: COPY.peak, status: 'peak', dateText: '2026-08-19', weekday: 3,
+        rate: COPY.rateStandard,
+        next: en ? 'tomorrow 09:00 (17 h 30 min from now)' : '明天 09:00（17 小时 30 分钟后）',
+        reason: COPY.peakReason }
+    : { label: COPY.off, status: 'off', dateText: '2026-08-19', weekday: 3,
+        rate: COPY.rateOffPeak,
+        next: en ? 'tomorrow 09:00 (17 h 30 min from now)' : '明天 09:00（17 小时 30 分钟后）',
+        reason: COPY.offReason };
+
+  const el = (tag, props, ...children) => {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props || {})) {
+      if (value === undefined || value === null) continue;
+      if (key === 'text') node.textContent = value;
+      else node.setAttribute(key, value);
+    }
+    for (const child of children) node.append(child);
+    return node;
+  };
+
+  const row = (label, value, tone) => el('div', { class: 'peak-badge-row' },
+    el('span', { class: 'peak-badge-key', text: label }),
+    el('span', { class: 'peak-badge-value', 'data-tone': tone, text: value }));
+
+  function render() {
+    const seat = document.getElementById('seat');
+    seat.textContent = '';
+    const showCard = view === 'card';
+    const root = el('div', { class: 'peak-badge-root' },
+      el('button', {
+        type: 'button', class: 'peak-badge-chip', 'data-status': SAMPLE.status,
+        'data-dsh-peak-badge': 'chip', title: COPY.title,
+        'aria-expanded': showCard ? 'true' : 'false', 'aria-haspopup': 'dialog',
+      },
+        el('span', { class: 'peak-badge-dot', 'aria-hidden': 'true' }),
+        el('span', { text: SAMPLE.label })));
+    if (showCard) {
+      root.append(el('div', {
+        class: 'peak-badge-card', 'data-dsh-peak-badge': 'card', role: 'dialog',
+        'aria-label': COPY.title,
+      },
+        row(COPY.state, `${SAMPLE.label} · ${SAMPLE.dateText} ${COPY.weekday[SAMPLE.weekday]}`, SAMPLE.status),
+        row(COPY.discount, SAMPLE.rate, SAMPLE.status),
+        row(COPY.next, SAMPLE.next, undefined),
+        row(COPY.schedule, '09:00–12:00 · 14:00–18:00', undefined),
+        el('div', { class: 'peak-badge-foot', text: SAMPLE.reason })));
+    }
+    seat.append(root);
+  }
+
+  window.__componentCss().then(render).catch((error) => {
+    document.body.append(el('pre', { text: String(error && error.message) }));
+  });
+</script>
+</body>
+</html>

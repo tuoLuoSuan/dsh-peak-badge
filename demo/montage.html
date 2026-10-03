@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dsh-peak-badge composer seat</title>
+<style>
+  /* The chip in its real place: the left end of the composer tool row.
+     Each frame is `demo/index.html` itself, so the image cannot drift from the
+     component. The iframes point at `_shot.html`, the copy this page's own
+     generator writes alongside it with the component stylesheet inlined — a
+     `file://` frame may not fetch `../client.js`. The screenshot harness writes
+     both files; this file is the source, `_montage.html` is the output. */
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body { padding: 24px 24px 22px; font: 13px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; color: #61666b; }
+  .row { display: flex; gap: 18px; align-items: flex-start; }
+  figure { margin: 0; }
+  iframe { display: block; border: 0; width: 360px; height: 156px; }
+  figcaption { margin-top: 8px; font-size: 12px; color: #81858c; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <figure>
+      <iframe src="_shot.html?theme=light&amp;lang=zh" title="light theme, Chinese"></iframe>
+      <figcaption>浅色主题 · 中文</figcaption>
+    </figure>
+    <figure>
+      <iframe src="_shot.html?theme=dark&amp;lang=zh" title="dark theme, Chinese"></iframe>
+      <figcaption>深色主题 · 中文</figcaption>
+    </figure>
+    <figure>
+      <iframe src="_shot.html?theme=light&amp;lang=en" title="light theme, English"></iframe>
+      <figcaption>浅色主题 · English</figcaption>
+    </figure>
+  </div>
+</body>
+</html>
