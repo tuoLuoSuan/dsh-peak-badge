@@ -1,0 +1,6 @@
+# Keep every shipped file exactly as written. `verify-policy.mjs` compares
+# rendered strings (for example the schedule line's en-dash) and `client.js`
+# carries a byte-level `#region` contract, so a CRLF rewrite on checkout is a
+# real behaviour change, not a cosmetic one.
+* text=auto eol=lf
+*.png binary

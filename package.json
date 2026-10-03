@@ -1,0 +1,53 @@
+{
+  "name": "@tuoluosuan/dsh-peak-badge",
+  "version": "0.1.0",
+  "description": "Peak / off-peak billing badge for the DeepSeek API — click to see which rate you are on right now.",
+  "license": "MIT",
+  "icon": "./icon.svg",
+  "type": "module",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek",
+    "pricing",
+    "off-peak"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuoLuoSuan/dsh-peak-badge.git"
+  },
+  "homepage": "https://github.com/tuoLuoSuan/dsh-peak-badge#readme",
+  "bugs": {
+    "url": "https://github.com/tuoLuoSuan/dsh-peak-badge/issues"
+  },
+  "files": [
+    "client.js",
+    "index.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "verify-policy.mjs",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

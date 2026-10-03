@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Peak / off-peak badge",
+    "description": "A chip beside the composer showing whether DeepSeek is billing at peak or off-peak rates right now, with the next switch and the reason for the verdict."
+  }
+}

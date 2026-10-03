@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Peak and off-peak hours">
+  <!-- A day's price chart: a flat off-peak baseline with the two peak windows
+       (09:00-12:00 and 14:00-18:00 Beijing) rising out of it, and a dot marking
+       "you are here". Drawn in currentColor so it inherits the theme. -->
+  <path d="M2 20h20" />
+  <path d="M4.5 20V9h7v11" />
+  <path d="M14.5 20V13h5v7" />
+  <circle cx="12" cy="15.5" r="1.6" fill="currentColor" stroke="none" />
+</svg>
