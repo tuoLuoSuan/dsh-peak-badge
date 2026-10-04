@@ -11,16 +11,21 @@
 两个状态、浅色和深色主题各来一张。这些图都是 `demo/` 里渲染出来的，跟仓库里的代码同源，
 不是另画的（见[截图是怎么来的](#截图是怎么来的)）：
 
-| 空闲（默认） | 高峰 | 深色主题 |
-|---|---|---|
-| <img src="docs/chip.png" width="300" alt="空闲"> | <img src="docs/chip-peak.png" width="300" alt="高峰"> | <img src="docs/chip-dark.png" width="300" alt="深色"> |
+| 空闲（默认） | <img src="docs/chip.png" width="300" alt="空闲"> |
+| 高峰 | <img src="docs/chip-peak.png" width="300" alt="高峰"> |
+| 深色主题 | <img src="docs/chip-dark.png" width="300" alt="深色"> |
+
+一列三行，不是三列一行：胶囊本身只有 52 css px 宽，塞进三列表格就只剩三分之一栏宽，
+再大的图也显示不出来。
 
 点开的卡片，三个变体：中文空闲、中文高峰、英文空闲。中文空闲那张是**故意挑的最长的一种**：
 国庆节里离下个高峰还有 4 天，`下次切换` 这一行是整张卡片能印出的最宽的值。
 
-| 中文 · 空闲 | 中文 · 高峰 | English · off-peak |
-|---|---|---|
-| <img src="docs/card-off.png" width="312" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="312" alt="卡片：中文高峰"> | <img src="docs/card-en.png" width="312" alt="卡片：英文"> |
+| 中文 · 空闲 | 中文 · 高峰 |
+|---|---|
+| <img src="docs/card-off.png" width="460" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="460" alt="卡片：中文高峰"> |
+| English · off-peak | |
+| <img src="docs/card-en.png" width="460" alt="卡片：英文"> | |
 
 ## 计费规则
 
@@ -302,9 +307,12 @@ node demo/shoot.mjs
 `demo/shoot.mjs` 用无头 Edge 打开它，按元素裁剪，写进 `docs/`。
 
 胶囊只有 52 css px 宽，所以它的截图按 6 倍像素渲染（卡片 4 倍），放进 README 里再放大也
-不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片在 README 里显示成
-300 px（胶囊）和 312 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
-`![]()` 语法带不了 `width`，所以这里用的是 HTML。
+不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片显示成 300 px（胶囊）和
+460 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的 `![]()` 语法带不了
+`width`，所以这里用的是 HTML。
+
+显示尺寸还受排版限制：GitHub 正文栏大约 1012 px，三列表格每格只剩三百出头，所以胶囊
+排成一列三行，卡片排成两列——图再大，格子小了也显不出来。
 
 `demo/shoot.mjs` 收工前还会量一次卡片的每一行：哪一行溢出了，或者被迫折成了两行，
 它就**报错退出，不写图**。折行在 PNG 上是看不出来的（卡片只是变高一点，什么都不像坏了），
