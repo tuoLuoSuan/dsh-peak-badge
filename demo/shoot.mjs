@@ -71,17 +71,19 @@ function componentCss() {
 }
 
 // Each shot: a page, a query, and the element to clip to. `waitFor` is the
-// selector that must exist before the clip is measured.
+// selector that must exist before the clip is measured. `scale` is the device
+// pixel ratio of the capture: the chip is only ~52 css px wide, so a 2x PNG of
+// it goes soft the moment the README shows it at a legible size.
 const SHOTS = [
-  { page: '_montage.html', file: 'composer.png', query: '', clip: 'body', waitFor: 'iframe' },
-  { page: '_shot.html', file: 'chip.png', query: '?view=chip&theme=light', clip: '.peak-badge-root' },
-  { page: '_shot.html', file: 'chip-dark.png', query: '?view=chip&theme=dark', clip: '.peak-badge-root' },
-  { page: '_shot.html', file: 'chip-peak.png', query: '?view=chip&state=peak&theme=light', clip: '.peak-badge-root' },
+  { page: '_montage.html', file: 'composer.png', query: '', clip: 'body', waitFor: 'iframe', scale: 1 },
+  { page: '_shot.html', file: 'chip.png', query: '?view=chip&theme=light', clip: '.peak-badge-root', scale: 6 },
+  { page: '_shot.html', file: 'chip-dark.png', query: '?view=chip&theme=dark', clip: '.peak-badge-root', scale: 6 },
+  { page: '_shot.html', file: 'chip-peak.png', query: '?view=chip&state=peak&theme=light', clip: '.peak-badge-root', scale: 6 },
   // The card opens upward out of the chip and is absolutely positioned against
   // it, so the chip's own box does not contain it: clip to the union.
-  { page: '_shot.html', file: 'card-off.png', query: '?view=card&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card' },
-  { page: '_shot.html', file: 'card-peak.png', query: '?view=card&state=peak&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card' },
-  { page: '_shot.html', file: 'card-en.png', query: '?view=card&lang=en&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card' },
+  { page: '_shot.html', file: 'card-off.png', query: '?view=card&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card', scale: 4 },
+  { page: '_shot.html', file: 'card-peak.png', query: '?view=card&state=peak&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card', scale: 4 },
+  { page: '_shot.html', file: 'card-en.png', query: '?view=card&lang=en&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card', scale: 4 },
 ];
 
 const wait = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -170,6 +172,7 @@ async function shoot(client, shot) {
   await wait(600);
 
   const pad = shot.clip === 'body' ? 0 : 16;
+  const scale = shot.scale ?? 2;
   const { data } = await client.send('Page.captureScreenshot', {
     format: 'png',
     captureBeyondViewport: true,
@@ -178,7 +181,7 @@ async function shoot(client, shot) {
       y: Math.max(0, box.y - pad),
       width: Math.round(box.width + pad * 2),
       height: Math.round(box.height + pad * 2),
-      scale: 2,
+      scale,
     },
   });
   writeFileSync(join(outDir, shot.file), Buffer.from(data, 'base64'));
