@@ -20,7 +20,7 @@
 
 | 中文 · 空闲 | 中文 · 高峰 | English · off-peak |
 |---|---|---|
-| <img src="docs/card-off.png" width="320" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="320" alt="卡片：中文高峰"> | <img src="docs/card-en.png" width="320" alt="卡片：英文"> |
+| <img src="docs/card-off.png" width="312" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="312" alt="卡片：中文高峰"> | <img src="docs/card-en.png" width="312" alt="卡片：英文"> |
 
 ## 计费规则
 
@@ -303,7 +303,7 @@ node demo/shoot.mjs
 
 胶囊只有 52 css px 宽，所以它的截图按 6 倍像素渲染（卡片 4 倍），放进 README 里再放大也
 不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片在 README 里显示成
-300 px（胶囊）和 320 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
+300 px（胶囊）和 312 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
 `![]()` 语法带不了 `width`，所以这里用的是 HTML。
 
 `demo/shoot.mjs` 收工前还会量一次卡片的每一行：哪一行溢出了，或者被迫折成了两行，
