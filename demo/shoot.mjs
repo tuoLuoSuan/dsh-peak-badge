@@ -173,6 +173,40 @@ async function shoot(client, shot) {
 
   const pad = shot.clip === 'body' ? 0 : 16;
   const scale = shot.scale ?? 2;
+
+  // A row that had to wrap is a layout bug the PNG will not announce: the card
+  // just gets taller and nothing looks broken. With `white-space: nowrap` the
+  // symptom moves to overflow, so measure both and refuse to write either.
+  const overflow = `(() => {
+    const card = document.querySelector('.peak-badge-card');
+    if (card === null) return null;
+    const rows = Array.from(card.querySelectorAll('.peak-badge-row'));
+    return {
+      overflow: rows.some((row) => row.scrollWidth > row.clientWidth + 1),
+      room: card.clientWidth - rows.reduce((worst, row) => {
+        const key = row.querySelector('.peak-badge-key');
+        const value = row.querySelector('.peak-badge-value');
+        if (key === null || value === null) return worst;
+        return Math.max(worst, key.offsetWidth + value.scrollWidth);
+      }, 0),
+      lines: rows.map((row) => {
+        const value = row.querySelector('.peak-badge-value');
+        if (value === null) return 0;
+        const style = getComputedStyle(value);
+        return Math.round(value.getBoundingClientRect().height / parseFloat(style.lineHeight || '18'));
+      }),
+    };
+  })()`;
+  const measured = await client.send('Runtime.evaluate', { expression: overflow, returnByValue: true });
+  const layout = measured.result.value;
+  if (layout !== null) {
+    const wrapped = layout.lines.filter((count) => count > 1).length;
+    if (layout.overflow || wrapped > 0) {
+      throw new Error(`${shot.file}: the card overflows its rows (${JSON.stringify(layout)})`);
+    }
+    console.log(`  card rows: slack ${layout.room}px, lines ${layout.lines.join('/')}`);
+  }
+
   const { data } = await client.send('Page.captureScreenshot', {
     format: 'png',
     captureBeyondViewport: true,

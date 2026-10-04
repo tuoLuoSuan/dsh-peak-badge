@@ -168,16 +168,19 @@
     },
   }[en ? 'en' : 'zh'];
 
-  // 2026-08-19 is a Wednesday; 10:00 Beijing is peak, 15:30 is off-peak.
+  // 2026-08-19 is a Wednesday; 10:00 Beijing is peak, 15:30 is off-peak. The
+  // off-peak shot is deliberately the widest case the card can print: a
+  // 4-day gap during 国庆节, which is what used to wrap `下次切换` onto two
+  // lines. If the shot shows one line, that is the fix holding.
   const SAMPLE = peak
     ? { label: COPY.peak, status: 'peak', dateText: '2026-08-19', weekday: 3,
         rate: COPY.rateStandard,
-        next: en ? 'tomorrow 09:00 (17 h 30 min from now)' : '明天 09:00（17 小时 30 分钟后）',
+        next: en ? 'tomorrow 09:00 (17 h 30 min)' : '明天 09:00（17 小时 30 分钟）',
         reason: COPY.peakReason }
-    : { label: COPY.off, status: 'off', dateText: '2026-08-19', weekday: 3,
+    : { label: COPY.off, status: 'off', dateText: '2026-10-03', weekday: 6,
         rate: COPY.rateOffPeak,
-        next: en ? 'tomorrow 09:00 (17 h 30 min from now)' : '明天 09:00（17 小时 30 分钟后）',
-        reason: COPY.offReason };
+        next: en ? 'in 4 days 09:00 (3 d 22 h)' : '4 天后 09:00（3 天 22 小时）',
+        reason: en ? 'Statutory holiday: 国庆节. Billed off-peak all day.' : '法定节假日：国庆节，全天按空闲时段计价。' };
 
   const el = (tag, props, ...children) => {
     const node = document.createElement(tag);

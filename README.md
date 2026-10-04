@@ -13,13 +13,14 @@
 
 | 空闲（默认） | 高峰 | 深色主题 |
 |---|---|---|
-| <img src="docs/chip.png" width="168" alt="空闲"> | <img src="docs/chip-peak.png" width="168" alt="高峰"> | <img src="docs/chip-dark.png" width="168" alt="深色"> |
+| <img src="docs/chip.png" width="300" alt="空闲"> | <img src="docs/chip-peak.png" width="300" alt="高峰"> | <img src="docs/chip-dark.png" width="300" alt="深色"> |
 
-点开的卡片，三个变体：中文空闲、中文高峰、英文空闲：
+点开的卡片，三个变体：中文空闲、中文高峰、英文空闲。中文空闲那张是**故意挑的最长的一种**：
+国庆节里离下个高峰还有 4 天，`下次切换` 这一行是整张卡片能印出的最宽的值。
 
 | 中文 · 空闲 | 中文 · 高峰 | English · off-peak |
 |---|---|---|
-| <img src="docs/card-off.png" width="290" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="290" alt="卡片：中文高峰"> | <img src="docs/card-en.png" width="290" alt="卡片：英文"> |
+| <img src="docs/card-off.png" width="320" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="320" alt="卡片：中文高峰"> | <img src="docs/card-en.png" width="320" alt="卡片：英文"> |
 
 ## 计费规则
 
@@ -115,12 +116,12 @@ TZ=Asia/Shanghai        node verify-policy.mjs
 TZ=Pacific/Kiritimati   node verify-policy.mjs
 ```
 
-四个时区都是 88 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
+四个时区都是 92 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
 「简化」），这套断言立刻挂。验证过，不是推测。
 
 退出码按本工作区的约定分三种：`0` 全过，`1` 有断言挂了（**代码错了**），
-`2` 根本没跑起来（与代码无关）。加了 `--dump` 会把抠出来的那段代码打出来。
-最后还压了一条底线：跑过的条数少于预期（现在是 88）也一样按 1 退出，
+`2` 根本没跑起来（与代码无关）。加了 `--dump` 会把抠出来的那段代码印出来。
+最后还压了一条底线：跑过的条数少于预期（现在是 92）也一样按 1 退出，
 否则「某个小节整段没跑」会打印成「0 passed, 0 failed」然后安安静静地返回 0。
 
 > 关于这套断言的可信度：写它的时候，我**手算的期望值错了六次，机器每次都对**。
@@ -205,7 +206,7 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
    会抛 `INACTIVE_EFFECT`，而卸载和销毁本来就是会撞车的。
    别改用全局 `setTimeout`：动态客户端包里它是会抛错的陷阱（`client.js:9-11` 记的就是
    这条），而且即使在这里能用，它也不跟页面生命周期绑定，卸载后会继续跑。同理，语言切换
-   靠的是 `locale.subscribe`（`client.js:588-606`），不是重新加载。
+   靠的是 `locale.subscribe`（`client.js:612-634`），不是重新加载。
 
 2. **周几要按「那一刻」算，不能按「那一天」算。** 北京时间的周五 18:00 之后就是谷时，
    一直谷到周一早上；如果周几取自当天日期，周五晚上就会被算成工作日峰时。
@@ -301,7 +302,13 @@ node demo/shoot.mjs
 `demo/shoot.mjs` 用无头 Edge 打开它，按元素裁剪，写进 `docs/`。
 
 胶囊只有 52 css px 宽，所以它的截图按 6 倍像素渲染（卡片 4 倍），放进 README 里再放大也
-不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。
+不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片在 README 里显示成
+300 px（胶囊）和 320 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
+`![]()` 语法带不了 `width`，所以这里用的是 HTML。
+
+`demo/shoot.mjs` 收工前还会量一次卡片的每一行：哪一行溢出了，或者被迫折成了两行，
+它就**报错退出，不写图**。折行在 PNG 上是看不出来的（卡片只是变高一点，什么都不像坏了），
+所以这事只能量，不能靠眼睛看。
 
 几个已经踩过的坑，改这个脚本之前值得知道：
 

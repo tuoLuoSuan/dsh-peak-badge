@@ -346,6 +346,15 @@ window.__ModuleLoader__.load({
     // at 6px a superellipse keeps visibly flat sides — the dot renders as a rounded
     // SQUARE, not a circle. Rendering both variants at 10x under Edge confirmed it;
     // engines without `corner-shape` ignore the declaration, so it costs nothing.
+    //
+    // The card is 304px wide rather than the 264px it started at, because the
+    // `下次切换` value has to stay on one line. Its longest form is
+    // `N 天后 09:00（M 天 N 小时）`: about 200px at 12px, plus the `下次切换` label
+    // (48px) and the 10px flex gap. At 264px that row wrapped, leaving a lone `）`
+    // on a second line, which reads as a broken layout rather than a long value.
+    // `verify-policy.mjs` guards the format; `demo/shoot.mjs` measures the row and
+    // refuses to write a screenshot when a row overflows, since a wrapped row is
+    // invisible in the PNG itself.
     const CSS = `
 .peak-badge-root { position: relative; display: inline-flex; }
 .peak-badge-chip {
@@ -364,7 +373,7 @@ window.__ModuleLoader__.load({
 .peak-badge-dot { width: 6px; height: 6px; border-radius: 50%; corner-shape: round; background: currentColor; flex: none; }
 .peak-badge-card {
   position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 40;
-  width: 264px; box-sizing: border-box; padding: 10px 12px;
+  width: 304px; box-sizing: border-box; padding: 10px 12px;
   display: flex; flex-direction: column; gap: 6px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-overlay);
@@ -375,7 +384,10 @@ window.__ModuleLoader__.load({
 .peak-badge-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
 .peak-badge-row + .peak-badge-row { border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 6px; }
 .peak-badge-key { color: var(--dsw-alias-label-secondary); flex: none; }
-.peak-badge-value { text-align: right; }
+/* A row is one line by contract: every value here is a short fact (a date, a
+   rate, a window), and the card is sized for the longest of them. Letting one
+   wrap puts an orphaned word on a second line and the row reads as a mistake. */
+.peak-badge-value { text-align: right; white-space: nowrap; }
 .peak-badge-value[data-tone="peak"] { color: var(--dsw-alias-state-warn-primary); }
 .peak-badge-value[data-tone="off"] { color: var(--dsw-alias-label-secondary); }
 .peak-badge-foot { font-size: 11px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
@@ -427,11 +439,11 @@ window.__ModuleLoader__.load({
       clockError: '无法读取本机时钟。',
       hour: '小时',
       minute: '分钟',
+      day: '天',
       today: '今天',
       tomorrow: '明天',
       dayAfter: '后天',
       daysAfter: '天后',
-      after: '后',
       weekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
       rateStandard: '标准价',
       rateOffPeak: '5 折 · 半价',
@@ -450,11 +462,11 @@ window.__ModuleLoader__.load({
       clockError: 'The local clock could not be read.',
       hour: 'h',
       minute: 'min',
+      day: 'd',
       today: 'today',
       tomorrow: 'tomorrow',
       dayAfter: 'in 2 days',
       daysAfter: 'days from now',
-      after: ' from now',
       weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
       rateStandard: 'standard rate',
       rateOffPeak: '50% · half price',
@@ -525,13 +537,25 @@ window.__ModuleLoader__.load({
 
     const text = Object.assign({}, TEXT_ZH);
 
-    /** A minute count as `X 小时 Y 分钟` / `Y 分钟`. */
+    /**
+     * A minute count as `X 天 Y 小时` / `X 小时 Y 分钟` / `Y 分钟`.
+     *
+     * This is a size decision as much as a wording one. The `下次切换` row has to
+     * stay on one line: `94 小时 19 分钟` is both wide and harder to read than
+     * `3 天 22 小时`, and once the gap is a day or more the exact minute is noise
+     * on a card that already prints the absolute switch time.
+     */
     function formatGap(minutes) {
-      const hours = Math.floor(minutes / 60);
-      const rest = minutes % 60;
-      if (hours === 0) return `${rest} ${text.minute}`;
-      if (rest === 0) return `${hours} ${text.hour}`;
-      return `${hours} ${text.hour} ${rest} ${text.minute}`;
+      const total = Math.max(0, Math.ceil(minutes));
+      const days = Math.floor(total / 1440);
+      const hours = Math.floor((total % 1440) / 60);
+      const rest = total % 60;
+      const unit = (count, label) => `${count} ${label}`;
+      const parts = [];
+      if (days > 0) parts.push(unit(days, text.day));
+      if (hours > 0 || days > 0) parts.push(unit(hours, text.hour));
+      if (days === 0) parts.push(unit(rest, text.minute));
+      return parts.join(' ');
     }
 
     /** How many Beijing days ahead a peak window is, in words. */
@@ -652,8 +676,8 @@ window.__ModuleLoader__.load({
       const nextText = state.next === undefined
         ? (status === 'off' ? text.beyondHorizon : text.pending)
          : i18n.lang === 'en'
-          ? `${dayOffsetLabel(state.next.inDays)} ${state.next.at} (${formatGap(state.next.leftMinutes)}${text.after})`
-          : `${dayOffsetLabel(state.next.inDays)} ${state.next.at}（${formatGap(state.next.leftMinutes)}${text.after}）`;
+          ? `${dayOffsetLabel(state.next.inDays)} ${state.next.at} (${formatGap(state.next.leftMinutes)})`
+          : `${dayOffsetLabel(state.next.inDays)} ${state.next.at}（${formatGap(state.next.leftMinutes)}）`;
 
       return h('div', {
         className: 'peak-badge-root',

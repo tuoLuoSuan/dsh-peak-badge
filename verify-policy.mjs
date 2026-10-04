@@ -233,8 +233,16 @@ if (policy !== undefined) {
 
         const zh = load('zh-CN');
         check('gap: 90 minutes', zh.formatGap(90), '1 小时 30 分钟');
-        check('gap: 3 hours exactly', zh.formatGap(180), '3 小时');
+        // Zero minutes are kept on purpose: the card prints a fixed set of rows,
+        // and `3 小时` vs `3 小时 0 分钟` alternating between renders makes the row
+        // jump. One shape per magnitude is easier to read than a shorter one.
+        check('gap: 3 hours exactly keeps the minutes field', zh.formatGap(180), '3 小时 0 分钟');
         check('gap: under an hour', zh.formatGap(1), '1 分钟');
+        // 94 h 19 min is the 国庆节 case the card used to wrap onto two lines:
+        // days take over at 24 h, and the minutes drop once days are in play.
+        check('gap: past a day switches to days', zh.formatGap(5659), '3 天 22 小时');
+        check('gap: whole days keep the hours', zh.formatGap(5760), '4 天 0 小时');
+        check('gap: 47 hours', zh.formatGap(2820), '1 天 23 小时');
         check('day offset: today', zh.dayOffsetLabel(0), '今天');
         check('day offset: tomorrow', zh.dayOffsetLabel(1), '明天');
         check('day offset: the day after', zh.dayOffsetLabel(2), '后天');
@@ -242,7 +250,8 @@ if (policy !== undefined) {
 
         const en = load('en-US');
         check('gap in English', en.formatGap(90), '1 h 30 min');
-        check('gap in English, exact hours', en.formatGap(180), '3 h');
+        check('gap in English, exact hours', en.formatGap(180), '3 h 0 min');
+        check('gap in English, past a day', en.formatGap(5659), '3 d 22 h');
         check('day offset in English', en.dayOffsetLabel(3), '3 days from now');
 
         // The sentences a user actually reads, in both languages.
@@ -357,7 +366,7 @@ if (policy !== undefined) {
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 88;
+  const FLOOR = 92;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;
