@@ -604,6 +604,7 @@ window.__ModuleLoader__.load({
       // render so the first paint is already correct.
       const [tick, setTick] = React.useState(0);
       const [open, setOpen] = React.useState(false);
+      const rootRef = React.useRef(null);
 
       React.useEffect(() => {
         ensureStyles();
@@ -679,18 +680,38 @@ window.__ModuleLoader__.load({
           ? `${dayOffsetLabel(state.next.inDays)} ${state.next.at} (${formatGap(state.next.leftMinutes)})`
           : `${dayOffsetLabel(state.next.inDays)} ${state.next.at}（${formatGap(state.next.leftMinutes)}）`;
 
+      /**
+       * Close the card when the pointer goes down anywhere outside it.
+       *
+       * On `document`, in the capture phase, rather than React's `onBlur` on the
+       * root: an outside click on a NON-focusable area — the transcript, the
+       * composer background — does not move focus, so it fires no blur at all and
+       * the card stayed open until the chip was pressed a second time. The event
+       * is retargeted, so `contains` reads the truth even when a click inside the
+       * card lands on a child; capture means a handler inside the card that stops
+       * propagation cannot make this one stale.
+       *
+       * Unmounting here is safe: the card is not interactive, and `pointerdown`
+       * precedes the mouseup that a button inside it would need.
+       */
+      React.useEffect(() => {
+        if (!open) return undefined;
+        const onPointerDown = (event) => {
+          const root = rootRef.current;
+          if (root !== null && !root.contains(event.target)) setOpen(false);
+        };
+        document.addEventListener('pointerdown', onPointerDown, true);
+        return () => document.removeEventListener('pointerdown', onPointerDown, true);
+      }, [open]);
+
       return h('div', {
+        ref: rootRef,
         className: 'peak-badge-root',
         tabIndex: -1,
-        // Focus-based dismissal rather than a document-level click listener:
-        // React's synthetic click has already run by the time the chip flips the
-        // flag, and a native listener would read the open card as "outside".
-        //
-        // `relatedTarget === null` means focus left the document (an outside
-        // mouse click), not that it moved to a sibling: closing there would
-        // unmount the card before its own mouseup, so anything clickable inside
-        // it could never be clicked. Keep the card open in that case and let the
-        // chip's own click or Escape close it.
+        // Keyboard dismissal. `relatedTarget === null` means focus left the
+        // document, i.e. an outside click — and that case is already handled by
+        // the pointer listener above, which fires first and closes the card. So
+        // this only has to cover focus moving to a real sibling.
         onBlur: (event) => {
           const next = event.relatedTarget;
           if (next === null || event.currentTarget.contains(next)) return;

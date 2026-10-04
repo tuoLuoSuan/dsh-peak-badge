@@ -361,12 +361,36 @@ if (policy !== undefined) {
   console.log('\n--- a walk that has to cross a make-up workday ---');
   check('Fri 2026-05-08 20:00 walks to Monday, not to 调休 Saturday', at(2026, 5, 8, 20, 0), `off | 3 09:00 3660min | ${OFF} | workingDayOff`);
 
+  // ---------------------------------------------------------------------------
+  // The dismissal wiring, read as text out of client.js.
+  //
+  // Nothing above can catch this: an outside click that does not close the card
+  // is a browser behaviour, and this file has no DOM. What it CAN catch is the
+  // regression that actually happened — the card was closed by blur alone, and an
+  // outside click on a non-focusable area (the transcript, the composer
+  // background) moves no focus, so it fired no blur and the card stayed open
+  // until the user pressed the chip a second time.
+  //
+  // Each assertion names one thing that has to be true for that to work. They are
+  // deliberately narrow: this is a tripwire for deleting the listener, not a
+  // parser.
+  // ---------------------------------------------------------------------------
+  console.log('\n--- the card closes when you click outside it ---');
+  {
+    const wiring = source === undefined ? '' : source;
+    check('a document-level pointerdown listener is registered', String(/document\.addEventListener\('pointerdown'/.test(wiring)), 'true');
+    check('it runs in the capture phase, ahead of anything that may stop propagation', String(/document\.addEventListener\('pointerdown', [^)]*?, true\)/.test(wiring)), 'true');
+    check('it is removed again with the same phase', String(/document\.removeEventListener\('pointerdown', [^)]*?, true\)/.test(wiring)), 'true');
+    check('it is registered while the card is open and dropped when it is not', String(/if \(!open\) return undefined;/.test(wiring)), 'true');
+    check('the root element it measures "outside" against is the one the listener reads', String(/ref: rootRef,\s*\n\s*className: 'peak-badge-root',/.test(wiring)), 'true');
+  }
+
   console.log(`\n${passed} passed, ${failed} failed`);
   // A floor, not just `failed > 0`: a section that stops running entirely would
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 92;
+  const FLOOR = 97;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;
