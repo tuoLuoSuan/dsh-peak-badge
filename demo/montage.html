@@ -9,29 +9,43 @@
      component. The iframes point at `_shot.html`, the copy this page's own
      generator writes alongside it with the component stylesheet inlined — a
      `file://` frame may not fetch `../client.js`. The screenshot harness writes
-     both files; this file is the source, `_montage.html` is the output. */
+     both files; this file is the source, `_montage.html` is the output.
+
+     Three frames across one row was too small: each got a third of the image, and
+     the image only spans GitHub's ~1012px content column, so the composer — a
+     620px component — was shown at ~200px. The frames go one per row instead,
+     the row is only as tall as the composer (the harness measures it), and the
+     crop ends ~40px past the composer so the shot does not carry dead space that
+     shrinks everything else.
+
+     `width: max-content` on the body is load-bearing: the clip is taken from the
+     body's box, and a block body fills the window, so the shot came out 1366px
+     wide with the three panels stacked in the left 700px of it. */
   html, body { margin: 0; padding: 0; background: #ffffff; }
-  body { padding: 24px 24px 22px; font: 13px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; color: #61666b; }
-  .row { display: flex; gap: 18px; align-items: flex-start; }
+  body {
+    width: max-content;
+    padding: 22px 40px 20px 24px;
+    font: 13px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #61666b;
+  }
   figure { margin: 0; }
-  iframe { display: block; border: 0; width: 360px; height: 156px; }
+  figure + figure { margin-top: 20px; }
+  iframe { display: block; border: 0; width: 620px; height: 172px; background: #ffffff; }
   figcaption { margin-top: 8px; font-size: 12px; color: #81858c; }
 </style>
 </head>
 <body>
-  <div class="row">
-    <figure>
-      <iframe src="_shot.html?theme=light&amp;lang=zh" title="light theme, Chinese"></iframe>
-      <figcaption>浅色主题 · 中文</figcaption>
-    </figure>
-    <figure>
-      <iframe src="_shot.html?theme=dark&amp;lang=zh" title="dark theme, Chinese"></iframe>
-      <figcaption>深色主题 · 中文</figcaption>
-    </figure>
-    <figure>
-      <iframe src="_shot.html?theme=light&amp;lang=en" title="light theme, English"></iframe>
-      <figcaption>浅色主题 · English</figcaption>
-    </figure>
-  </div>
+  <figure>
+    <iframe src="_shot.html?theme=light&amp;lang=zh" title="light theme, Chinese"></iframe>
+    <figcaption>浅色主题 · 中文</figcaption>
+  </figure>
+  <figure>
+    <iframe src="_shot.html?theme=dark&amp;lang=zh" title="dark theme, Chinese"></iframe>
+    <figcaption>深色主题 · 中文</figcaption>
+  </figure>
+  <figure>
+    <iframe src="_shot.html?theme=light&amp;lang=en" title="light theme, English"></iframe>
+    <figcaption>浅色主题 · English</figcaption>
+  </figure>
 </body>
 </html>

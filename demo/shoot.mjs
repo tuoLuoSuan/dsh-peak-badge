@@ -75,7 +75,7 @@ function componentCss() {
 // pixel ratio of the capture: the chip is only ~52 css px wide, so a 2x PNG of
 // it goes soft the moment the README shows it at a legible size.
 const SHOTS = [
-  { page: '_montage.html', file: 'composer.png', query: '', clip: 'body', waitFor: 'iframe', scale: 1 },
+  { page: '_montage.html', file: 'composer.png', query: '', clip: 'body', waitFor: 'iframe', scale: 3, fitFrames: true },
   { page: '_shot.html', file: 'chip.png', query: '?view=chip&theme=light', clip: '.peak-badge-root', scale: 6 },
   { page: '_shot.html', file: 'chip-dark.png', query: '?view=chip&theme=dark', clip: '.peak-badge-root', scale: 6 },
   { page: '_shot.html', file: 'chip-peak.png', query: '?view=chip&state=peak&theme=light', clip: '.peak-badge-root', scale: 6 },
@@ -171,6 +171,40 @@ async function shoot(client, shot) {
   // still be settling (fonts, iframes), so give it a beat after it appears.
   await wait(600);
 
+  // A montage frame's height is not knowable from the parent: the composer
+  // inside decides it. A hardcoded height is either too short (the panel is cut)
+  // or too tall (the dark theme paints its background down to the frame's bottom
+  // edge, which shows as a stray black slab). So measure the composer inside each
+  // frame and set the frame to exactly that.
+  if (shot.fitFrames) {
+    const fit = `(() => {
+      const frames = Array.from(document.querySelectorAll('iframe'));
+      return frames.map((frame) => {
+        const inner = frame.contentDocument;
+        if (inner === null) return 0;
+        const composer = inner.querySelector('.composer');
+        if (composer === null) return 0;
+        const height = Math.ceil(composer.getBoundingClientRect().height);
+        if (height > 0) frame.style.height = height + 'px';
+        return height;
+      });
+    })()`;
+    let fitted = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const result = await client.send('Runtime.evaluate', { expression: fit, returnByValue: true });
+      fitted = result.result.value ?? [];
+      if (fitted.length > 0 && fitted.every((height) => height > 0)) break;
+      await wait(150);
+    }
+    if (!fitted.every((height) => height > 0)) {
+      throw new Error(`${shot.file}: a frame never reported its composer height (${JSON.stringify(fitted)})`);
+    }
+    console.log(`  frame heights: ${fitted.join('/')} css px`);
+    await wait(200);
+    const remeasure = await client.send('Runtime.evaluate', { expression: measure, returnByValue: true });
+    box = remeasure.result.value ?? box;
+  }
+
   const pad = shot.clip === 'body' ? 0 : 16;
   const scale = shot.scale ?? 2;
 
@@ -257,6 +291,10 @@ const child = spawn(browser, [
   '--disable-gpu',
   '--no-first-run',
   '--hide-scrollbars',
+  // `file://` documents are opaque origins, so an iframe's `contentDocument` is
+  // null without this: the montage cannot measure the composer it frames, and the
+  // frames keep whatever height the page guessed.
+  '--allow-file-access-from-files',
   '--force-device-scale-factor=1',
   '--window-size=1400,900',
   `--remote-debugging-port=${PORT}`,
