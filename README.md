@@ -316,10 +316,12 @@ node demo/shoot.mjs
 300 px（胶囊）和 312 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
 `![]()` 语法带不了 `width`，所以这里用的是 HTML。
 
-`src` 写的是 `https://raw.githubusercontent.com/...` 的**绝对地址**，不是 `docs/chip.png`
-这种相对路径。相对路径在仓库页面里看着没问题，但 `docs/` 不在 `files` 里、不进 tarball，
-而 npm 的包页面是照着 tarball 找图的——那边会全是裂图。绝对地址在仓库和 npm 上都对，
-代价是离线看这份 README 时图加载不出来。
+`src` 写的是 `https://raw.githubusercontent.com/...` 的绝对地址，不是 `docs/chip.png`
+这种相对路径。相对路径其实也能显示——npm 会拿 `repository` 字段去 GitHub 上找图
+（本机另一个插件就是这么发的，页面上图是好的）。这里仍然用绝对地址，是因为它不依赖
+那条规则：不管谁在渲染、按什么规则找图，那个地址都指向同一张图。附带的好处是装完包
+在本地翻这份 README 时图也看得见——`docs/` 不在 `files` 里、不进 tarball，相对路径
+在这里是找不到文件的。
 
 开头那张三格合成图是例外：它不是三张并排，而是三行竖排。并排时每一格只分到整栏的三分之一，
 620 px 的输入框被压到两百来 px，再高的倍率也救不回来。竖排之后每格占满整栏，输入框显示成
