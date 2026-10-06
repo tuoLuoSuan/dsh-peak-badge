@@ -1,6 +1,6 @@
 {
   "name": "@tuoluosuan/dsh-peak-badge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Peak / off-peak billing badge for the DeepSeek API — click to see which rate you are on right now.",
   "license": "MIT",
   "author": "tuoLuoSuan",
