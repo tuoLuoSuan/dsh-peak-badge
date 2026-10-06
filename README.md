@@ -2,7 +2,7 @@
 
 点一下就知道现在 DeepSeek 是按**高峰价**还是**空闲价**计费。
 
-<img src="docs/composer.png" width="1000" alt="输入框工具行最左边的胶囊">
+<img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/composer.png" width="1000" alt="输入框工具行最左边的胶囊">
 
 组件是一个小胶囊（chip），挂在输入框工具行的最左边（`conversation.input.left`）。
 胶囊左边一个小圆点，颜色跟着状态走：高峰是琥珀色，空闲是中性色。
@@ -13,14 +13,14 @@
 
 | 空闲（默认） | 高峰 | 深色主题 |
 |---|---|---|
-| <img src="docs/chip.png" width="300" alt="空闲"> | <img src="docs/chip-peak.png" width="300" alt="高峰"> | <img src="docs/chip-dark.png" width="300" alt="深色"> |
+| <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/chip.png" width="300" alt="空闲"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/chip-peak.png" width="300" alt="高峰"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/chip-dark.png" width="300" alt="深色"> |
 
 点开的卡片，三个变体：中文空闲、中文高峰、英文空闲。中文空闲那张是**故意挑的最长的一种**：
 国庆节里离下个高峰还有 4 天，`下次切换` 这一行是整张卡片能印出的最宽的值。
 
 | 中文 · 空闲 | 中文 · 高峰 | English · off-peak |
 |---|---|---|
-| <img src="docs/card-off.png" width="312" alt="卡片：中文空闲"> | <img src="docs/card-peak.png" width="312" alt="卡片：中文高峰"> | <img src="docs/card-en.png" width="312" alt="卡片：英文"> |
+| <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/card-off.png" width="312" alt="卡片：中文空闲"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/card-peak.png" width="312" alt="卡片：中文高峰"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/card-en.png" width="312" alt="卡片：英文"> |
 
 ## 计费规则
 
@@ -49,23 +49,27 @@ dsh plugin --profile desktop add github:tuoLuoSuan/dsh-peak-badge
 
 profile 名就是侧栏「工作区」对应的那个（桌面端默认 `desktop`）。
 
-**方式二：在对话里让 DSH 自己装**
+**方式二：装 npm 上的版本**
+
+```
+dsh plugin --profile desktop add @tuoluosuan/dsh-peak-badge
+```
+
+npm 上那份跟这个仓库同源，但不会自动跟着 `main` 走——想拿到新版本得等下一次发布。
+
+**方式三：在对话里让 DSH 自己装**
 
 ```
 plugin_manager action: install_bundle target: github:tuoLuoSuan/dsh-peak-badge
 ```
 
-**方式三：本地开发**（克隆下来直接指目录）
+**方式四：本地开发**（克隆下来直接指目录）
 
 ```
 plugin_manager action: install_bundle target: D:\path\to\dsh-peak-badge
 ```
 
 `target` 接受包名（可带版本）、git 地址、tarball 或本地绝对路径。
-
-> npm 上还没有这个包（`@tuoluosuan/dsh-peak-badge` 已经打好包，但发布那一步卡在
-> 账号的 2FA 上，暂时没发）。所以上面没有 `add @tuoluosuan/dsh-peak-badge` 这一行；
-> 等发上去了再加。
 
 装完刷新页面。**替换已装版本需要重启**才能加载新代码（热加载只覆盖新装的 bundle）。
 
@@ -311,6 +315,11 @@ node demo/shoot.mjs
 不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片在 README 里显示成
 300 px（胶囊）和 312 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
 `![]()` 语法带不了 `width`，所以这里用的是 HTML。
+
+`src` 写的是 `https://raw.githubusercontent.com/...` 的**绝对地址**，不是 `docs/chip.png`
+这种相对路径。相对路径在仓库页面里看着没问题，但 `docs/` 不在 `files` 里、不进 tarball，
+而 npm 的包页面是照着 tarball 找图的——那边会全是裂图。绝对地址在仓库和 npm 上都对，
+代价是离线看这份 README 时图加载不出来。
 
 开头那张三格合成图是例外：它不是三张并排，而是三行竖排。并排时每一格只分到整栏的三分之一，
 620 px 的输入框被压到两百来 px，再高的倍率也救不回来。竖排之后每格占满整栏，输入框显示成

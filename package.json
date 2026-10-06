@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Peak / off-peak billing badge for the DeepSeek API — click to see which rate you are on right now.",
   "license": "MIT",
+  "author": "tuoLuoSuan",
   "icon": "./icon.svg",
   "type": "module",
   "keywords": [
@@ -29,6 +30,10 @@
     "verify-policy.mjs",
     "README.md"
   ],
+  "scripts": {
+    "test": "node verify-policy.mjs",
+    "prepublishOnly": "node docs/audit-publish.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -37,6 +42,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dsh": {
     "bundle": {
@@ -48,6 +56,14 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
     }
   }
 }
