@@ -385,12 +385,77 @@ if (policy !== undefined) {
     check('the root element it measures "outside" against is the one the listener reads', String(/ref: rootRef,\s*\n\s*className: 'peak-badge-root',/.test(wiring)), 'true');
   }
 
+  console.log('\n--- the chip and the card are opaque, so a wallpaper cannot show through them ---');
+  {
+    const css = source === undefined ? '' : source;
+    // Split the stylesheet into `selector { body }` chunks instead of one loose
+    // regex: `\s*` happily walks from a selector past the end of its own block, so
+    // a pattern like `\.chip\s*\{\s*background:` can report the NEXT rule's
+    // background. The `[^}]*` body cannot cross a closing brace.
+    const blocks = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .map((match) => ({ selector: match[1].trim().replace(/\s+/g, ' '), body: match[2] }));
+    const chip = (selector) => {
+      const block = blocks.find((entry) => entry.selector === selector);
+      if (block === undefined) return '';
+      const found = block.body.match(/(?:^|;)\s*background:\s*([^;]+);/);
+      return found === null ? '' : found[1].trim();
+    };
+    // 0.2126R + 0.7152G + 0.0722B, the luminance term of WCAG's contrast ratio.
+    const luminance = (hex) => {
+      const value = Number.parseInt(hex.slice(1), 16);
+      const channel = (part) => {
+        const c = part / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel((value >> 16) & 0xff) + 0.7152 * channel((value >> 8) & 0xff) + 0.0722 * channel(value & 0xff);
+    };
+    const contrast = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // "Opaque" means a solid fill: a literal colour, or a `var()` whose token comes
+    // from the STATIC palette. The shell's moving aliases are what a translucent
+    // theme rewrites, so a fill may not be one of those.
+    const solid = (value) => /^#[0-9a-f]{6}$/i.test(value) || /^var\(--dsw-static-[a-z0-9-]+\)$/.test(value);
+    // The static colours the fills are allowed to resolve to, read from the shipped
+    // theme (dsh-client-ui-theme/lib/client.js). Kept as a table so the contrast
+    // assertion below can check the real pair instead of a copy that may drift.
+    const PALETTE = {
+      '--dsw-static-neutral-bluish-00': '#ffffff',
+      '--dsw-static-neutral-bluish-150': '#e9ecf2',
+      '--dsw-static-neutral-bluish-700': '#61666b',
+      '--dsw-static-neutral-bluish-750': '#43454a',
+      '--dsw-static-neutral-bluish-850': '#2c2c2e',
+    };
+    const resolve = (value) => {
+      const token = value.match(/^var\((--dsw-static-[a-z0-9-]+)\)$/);
+      return token === null ? value : (PALETTE[token[1]] ?? '');
+    };
+    const chipLight = chip('.peak-badge-chip');
+    const chipDark = chip('body[data-ds-dark-theme] .peak-badge-chip');
+    check('the light chip is filled with an opaque colour', String(solid(chipLight)), 'true');
+    check('the dark chip is filled with an opaque colour too', String(solid(chipDark)), 'true');
+    check('the light and dark fills are actually different colours', String(chipLight.toLowerCase() !== chipDark.toLowerCase()), 'true');
+    check('the chip is never filled with a translucent surface token',
+      String(/\btransparent\b/.test(chipLight + chipDark)), 'false');
+    check('the card keeps its overlay fill, which the theme ships opaque',
+      String(chip('.peak-badge-card') === 'var(--dsw-alias-bg-overlay)'), 'true');
+    // 4.5:1 is WCAG AA for 12px text, and this is the pair that has to hold when the
+    // chip is a solid pill rather than a hole in the composer. `#61666b` is what
+    // --dsw-alias-label-secondary resolves to in the light theme.
+    const fill = resolve(chipLight);
+    if (/^#[0-9a-f]{6}$/i.test(fill)) {
+      const ratio = Math.round(contrast('#61666b', fill) * 10) / 10;
+      check(`the chip label clears 4.5:1 on the opaque fill (${ratio}:1)`, String(ratio >= 4.5), 'true');
+    }
+  }
+
   console.log(`\n${passed} passed, ${failed} failed`);
   // A floor, not just `failed > 0`: a section that stops running entirely would
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 97;
+  const FLOOR = 103;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;

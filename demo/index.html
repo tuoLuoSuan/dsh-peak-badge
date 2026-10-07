@@ -11,10 +11,17 @@
      table). Only the palette is faked here — the component's own rules are the
      real ones, sliced out of client.js. */
   :root {
+    /* Static palette: the two tokens the chip's opaque fill reads resolve from
+       here, so the stand-in is complete. Values are the shipped ones. */
+    --dsw-static-neutral-bluish-00: #ffffff;
+    --dsw-static-neutral-bluish-150: #e9ecf2;
+    --dsw-static-neutral-bluish-700: #61666b;
+    --dsw-static-neutral-bluish-750: #43454a;
+    --dsw-static-neutral-bluish-850: #2c2c2e;
     --dsw-alias-bg-base: #ffffff;
     --dsw-alias-bg-layer-1: #ffffff;
     --dsw-alias-bg-layer-2: #ffffff;
-    --dsw-alias-bg-overlay: #e9ecf2;
+    --dsw-alias-bg-overlay: var(--dsw-static-neutral-bluish-150);
     --dsw-alias-border-l1: #0000000a;
     --dsw-alias-border-l2: #0000001a;
     --dsw-alias-label-primary: #0f1115;
@@ -24,11 +31,16 @@
     --dsw-alias-state-warn-primary: #f59e0b;
     --dsw-font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   }
-  body[data-theme="dark"] {
+  /* The real app marks the dark theme with `data-ds-dark-theme` on <body>, and
+     the component's own dark rules are written against that attribute. This page
+     must carry it too, or every dark shot renders the light-theme branch and a
+     dark-theme regression would be invisible in the very PNG that is supposed to
+     show it. `data-theme` stays as this page's own switch for the local palette. */
+  body[data-ds-dark-theme] {
     --dsw-alias-bg-base: #1b1b1c;
     --dsw-alias-bg-layer-1: #232324;
     --dsw-alias-bg-layer-2: #2c2c2e;
-    --dsw-alias-bg-overlay: #61666b;
+    --dsw-alias-bg-overlay: var(--dsw-static-neutral-bluish-700);
     --dsw-alias-border-l1: #ffffff0f;
     --dsw-alias-border-l2: #ffffff1f;
     --dsw-alias-label-primary: #f9fafb;
@@ -141,6 +153,10 @@
   const peak = params.get('state') === 'peak';
   const en = params.get('lang') === 'en';
   document.body.dataset.theme = theme;
+  // The dark-theme switch the component's own rules read. Kept in step with the
+  // query parameter by hand: this page has no theme service to subscribe to.
+  if (theme === 'dark') document.body.setAttribute('data-ds-dark-theme', '');
+  else document.body.removeAttribute('data-ds-dark-theme');
   document.body.dataset.view = view;
   document.body.dataset.state = peak ? 'peak' : 'off';
   document.body.dataset.lang = en ? 'en' : 'zh';

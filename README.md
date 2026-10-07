@@ -120,12 +120,12 @@ TZ=Asia/Shanghai        node verify-policy.mjs
 TZ=Pacific/Kiritimati   node verify-policy.mjs
 ```
 
-四个时区都是 97 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
+四个时区都是 103 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
 「简化」），这套断言立刻挂。验证过，不是推测。
 
 退出码按本工作区的约定分三种：`0` 全过，`1` 有断言挂了（**代码错了**），
 `2` 根本没跑起来（与代码无关）。加了 `--dump` 会把抠出来的那段代码印出来。
-最后还压了一条底线：跑过的条数少于预期（现在是 97）也一样按 1 退出，
+最后还压了一条底线：跑过的条数少于预期（现在是 103）也一样按 1 退出，
 否则「某个小节整段没跑」会打印成「0 passed, 0 failed」然后安安静静地返回 0。
 
 > 关于这套断言的可信度：写它的时候，我**手算的期望值错了六次，机器每次都对**。
@@ -201,7 +201,7 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 这条边界就是 `verify-policy.mjs` 能单独执行这两段的原因：一旦 policy 里出现
 `text.xxx`，验证脚本会立刻抛 `ReferenceError`（真发生过一次）。
 
-## 不能改坏的五件事
+## 不能改坏的六件事
 
 1. **时间只能从 `ctx.get('timer')` 拿。** 反复执行的东西走
    `ctx.get('timer').interval(cb, ms)`，一次性延时走 `timeout`；两种都返回 disposer。
@@ -235,6 +235,17 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
    在这里卸载卡片是安全的——卡片本身没有可点的东西，而且 `pointerdown` 早于
    卡内按钮需要的 mouseup。`onBlur` 保留下来只管键盘：焦点移到真正的兄弟节点时收起来，
    `relatedTarget === null`（焦点离开文档）那条路已经由指针监听器先一步处理了。
+
+6. **胶囊和卡片的底色必须是不透明色。** 壁纸插件（`dsh-wallpaper-engine`）一装，
+   它就在 `<body>` 上挂 `data-we-glass-page`，然后把输入框的面色 token
+   `--dsw-specific-input-major` 改写成「纸色 + 壁纸色调」的 `color-mix()`。
+   胶囊原来是 `background: transparent`，于是壁纸直接透上来，12px 的字落在
+   壁纸的花纹上，看着就是一个花掉、废掉的控件（用户抓到的就是这个）。
+   现在胶囊用 `--dsw-static-neutral-bluish-00` / `-850`——正是那个面色 token
+   在没装插件时的两个取值，所以实心胶囊在两种主题下都和输入框同色；
+   卡片用 `--dsw-alias-bg-overlay`，两种主题下它本来就是不透明的。
+   `verify-policy.mjs` 会把两个底色抠出来，确认它们是实色 token 而不是
+   `transparent`，并算一遍标签对底色的对比度（5.8:1）。
 
 ## 两个踩过的渲染坑
 

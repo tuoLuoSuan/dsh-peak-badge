@@ -355,6 +355,21 @@ window.__ModuleLoader__.load({
     // `verify-policy.mjs` guards the format; `demo/shoot.mjs` measures the row and
     // refuses to write a screenshot when a row overflows, since a wrapped row is
     // invisible in the PNG itself.
+    //
+    // Both surfaces are OPAQUE, and that is a requirement rather than a taste.
+    // The chip and the card read the shell's SURFACE tokens while the composer they
+    // sit in is free to be translucent: the wallpaper plugin (dsh-wallpaper-engine)
+    // sets `data-we-glass-page` on <body> and rewrites the input surface token
+    // (`dsh-wallpaper-engine/lib/client.js`: `--dsw-specific-input-major` becomes a
+    // `color-mix()` of the wallpaper tint), so a transparent chip inherits the
+    // wallpaper and its 12px label lands on whatever pixels happen to be behind it.
+    // It read as a faded, broken control against a dark wallpaper. An opaque fill
+    // also keeps the chip legible over ANY wallpaper, which is the point.
+    //   chip -> --dsw-static-neutral-bluish-00 / -850, i.e. exactly the two values
+    //           `--dsw-specific-input-major` resolves to without the plugin, so the
+    //           solid chip matches the composer surface in both themes.
+    //   card -> --dsw-alias-bg-overlay, which is opaque in both themes (bluish-150
+    //           light / bluish-700 dark) and is the token for a floating surface.
     const CSS = `
 .peak-badge-root { position: relative; display: inline-flex; }
 .peak-badge-chip {
@@ -362,11 +377,13 @@ window.__ModuleLoader__.load({
   height: 24px; padding: 0 8px; box-sizing: border-box;
   font: inherit; font-size: 12px; line-height: 1;
   color: var(--dsw-alias-label-secondary);
-  background: transparent;
+  background: var(--dsw-static-neutral-bluish-00);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px; cursor: pointer; white-space: nowrap;
 }
+body[data-ds-dark-theme] .peak-badge-chip { background: var(--dsw-static-neutral-bluish-850); }
 .peak-badge-chip:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); }
+body[data-ds-dark-theme] .peak-badge-chip:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-static-neutral-bluish-750); }
 .peak-badge-chip[data-status="peak"] { color: var(--dsw-alias-state-warn-primary); }
 .peak-badge-chip[data-status="off"] { color: var(--dsw-alias-label-secondary); }
 .peak-badge-chip[data-status="unknown"] { color: var(--dsw-alias-label-secondary); }
