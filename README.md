@@ -120,12 +120,12 @@ TZ=Asia/Shanghai        node verify-policy.mjs
 TZ=Pacific/Kiritimati   node verify-policy.mjs
 ```
 
-四个时区都是 103 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
+四个时区都是 109 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
 「简化」），这套断言立刻挂。验证过，不是推测。
 
 退出码按本工作区的约定分三种：`0` 全过，`1` 有断言挂了（**代码错了**），
 `2` 根本没跑起来（与代码无关）。加了 `--dump` 会把抠出来的那段代码印出来。
-最后还压了一条底线：跑过的条数少于预期（现在是 103）也一样按 1 退出，
+最后还压了一条底线：跑过的条数少于预期（现在是 109）也一样按 1 退出，
 否则「某个小节整段没跑」会打印成「0 passed, 0 failed」然后安安静静地返回 0。
 
 > 关于这套断言的可信度：写它的时候，我**手算的期望值错了六次，机器每次都对**。
@@ -236,16 +236,21 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
    卡内按钮需要的 mouseup。`onBlur` 保留下来只管键盘：焦点移到真正的兄弟节点时收起来，
    `relatedTarget === null`（焦点离开文档）那条路已经由指针监听器先一步处理了。
 
-6. **胶囊和卡片的底色必须是不透明色。** 壁纸插件（`dsh-wallpaper-engine`）一装，
-   它就在 `<body>` 上挂 `data-we-glass-page`，然后把输入框的面色 token
-   `--dsw-specific-input-major` 改写成「纸色 + 壁纸色调」的 `color-mix()`。
-   胶囊原来是 `background: transparent`，于是壁纸直接透上来，12px 的字落在
-   壁纸的花纹上，看着就是一个花掉、废掉的控件（用户抓到的就是这个）。
-   现在胶囊用 `--dsw-static-neutral-bluish-00` / `-850`——正是那个面色 token
-   在没装插件时的两个取值，所以实心胶囊在两种主题下都和输入框同色；
-   卡片用 `--dsw-alias-bg-overlay`，两种主题下它本来就是不透明的。
-   `verify-policy.mjs` 会把两个底色抠出来，确认它们是实色 token 而不是
-   `transparent`，并算一遍标签对底色的对比度（5.8:1）。
+6. **胶囊和卡片的底色必须是不透明色，而且必须读静态色板。** 壁纸插件
+   （`dsh-wallpaper-engine`）一装，它就在 `<body>` 上挂 `data-we-glass-page`，
+   然后把**所有能画出实色面的别名 token** 都折进玻璃配方：输入框的
+   `--dsw-specific-input-major`、卡片原来用的 `--dsw-alias-bg-overlay`，
+   还有 `--dsw-alias-bg-layer-1/2/3`、几个 button-fill。两个症状都是用户抓到的：
+   胶囊原来是 `background: transparent`，壁纸直接透上来，12px 的字落在壁纸花纹上；
+   卡片读了被改写过的 `--dsw-alias-bg-overlay`，于是**点开的面板是透明的**。
+   **靠 `var(token, #fallback)` 的回退救不回来**——改写的值是 `color-mix(...)`，
+   是合法值，变量依然存在，回退永远不触发。
+   现在胶囊用 `--dsw-static-neutral-bluish-00` / `-850`（正是那个面色 token 在没装
+   插件时的两个取值，所以实心胶囊在两种主题下都和输入框同色），卡片用
+   `--dsw-static-neutral-bluish-150` / `-875`（`--dsw-alias-bg-overlay` 不透明时
+   背后的那对值）。`verify-policy.mjs` 会把四个底色都抠出来，确认它们是实色
+   token、浅深不同色、不是 `transparent`，并禁止卡片回退到 `--dsw-alias-bg-overlay`；
+   再算一遍文字对底色的对比度（胶囊 5.8:1 / 9.3:1，卡片 16:1 / 15:1）。
 
 ## 两个踩过的渲染坑
 

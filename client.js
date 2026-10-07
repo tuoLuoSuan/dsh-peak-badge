@@ -357,19 +357,24 @@ window.__ModuleLoader__.load({
     // invisible in the PNG itself.
     //
     // Both surfaces are OPAQUE, and that is a requirement rather than a taste.
-    // The chip and the card read the shell's SURFACE tokens while the composer they
-    // sit in is free to be translucent: the wallpaper plugin (dsh-wallpaper-engine)
-    // sets `data-we-glass-page` on <body> and rewrites the input surface token
-    // (`dsh-wallpaper-engine/lib/client.js`: `--dsw-specific-input-major` becomes a
-    // `color-mix()` of the wallpaper tint), so a transparent chip inherits the
-    // wallpaper and its 12px label lands on whatever pixels happen to be behind it.
-    // It read as a faded, broken control against a dark wallpaper. An opaque fill
-    // also keeps the chip legible over ANY wallpaper, which is the point.
+    // The wallpaper plugin (dsh-wallpaper-engine) puts `data-we-glass-page` on
+    // <body> and folds every alias token that can paint a solid surface into its
+    // glass recipe (its own comment calls the batch "全表面玻璃", added to fix
+    // "个别面仍是突兀实色块"). Both tokens this component used to read are in it:
+    //   --dsw-specific-input-major  -> the composer a transparent chip sat in
+    //   --dsw-alias-bg-overlay      -> the card, which is why the panel went
+    //                                  see-through when it opened
+    // Each becomes `color-mix(in srgb, base floor%, tint alpha%)`, so the variable
+    // still EXISTS and a `var(token, #fallback)` never falls back. Reading the
+    // static palette instead is what makes the fill opaque regardless of which
+    // plugins rewrite the aliases.
     //   chip -> --dsw-static-neutral-bluish-00 / -850, i.e. exactly the two values
     //           `--dsw-specific-input-major` resolves to without the plugin, so the
     //           solid chip matches the composer surface in both themes.
-    //   card -> --dsw-alias-bg-overlay, which is opaque in both themes (bluish-150
-    //           light / bluish-700 dark) and is the token for a floating surface.
+    //   card -> --dsw-static-neutral-bluish-150 / -875, the opaque pair behind
+    //           `--dsw-alias-bg-overlay`. The card floats over the wallpaper rather
+    //           than sitting in the composer, so it takes the panel shade (the
+    //           wallpaper plugin's own solid panel colour is bluish-875 on dark).
     const CSS = `
 .peak-badge-root { position: relative; display: inline-flex; }
 .peak-badge-chip {
@@ -393,11 +398,12 @@ body[data-ds-dark-theme] .peak-badge-chip:hover { color: var(--dsw-alias-label-p
   width: 304px; box-sizing: border-box; padding: 10px 12px;
   display: flex; flex-direction: column; gap: 6px;
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-overlay);
+  background: var(--dsw-static-neutral-bluish-150);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, .16);
 }
+body[data-ds-dark-theme] .peak-badge-card { background: var(--dsw-static-neutral-bluish-875); }
 .peak-badge-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
 .peak-badge-row + .peak-badge-row { border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 6px; }
 .peak-badge-key { color: var(--dsw-alias-label-secondary); flex: none; }

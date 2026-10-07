@@ -394,7 +394,11 @@ if (policy !== undefined) {
     // background. The `[^}]*` body cannot cross a closing brace.
     const blocks = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
       .map((match) => ({ selector: match[1].trim().replace(/\s+/g, ' '), body: match[2] }));
-    const chip = (selector) => {
+    // Reads the `background` of one rule, by exact selector. Named `fill` rather
+    // than `chip` because the card goes through it too — the first version of this
+    // section only checked the chip, and the card was the surface the user
+    // actually saw go transparent.
+    const fill = (selector) => {
       const block = blocks.find((entry) => entry.selector === selector);
       if (block === undefined) return '';
       const found = block.body.match(/(?:^|;)\s*background:\s*([^;]+);/);
@@ -426,27 +430,48 @@ if (policy !== undefined) {
       '--dsw-static-neutral-bluish-700': '#61666b',
       '--dsw-static-neutral-bluish-750': '#43454a',
       '--dsw-static-neutral-bluish-850': '#2c2c2e',
+      '--dsw-static-neutral-bluish-875': '#232324',
     };
     const resolve = (value) => {
       const token = value.match(/^var\((--dsw-static-[a-z0-9-]+)\)$/);
       return token === null ? value : (PALETTE[token[1]] ?? '');
     };
-    const chipLight = chip('.peak-badge-chip');
-    const chipDark = chip('body[data-ds-dark-theme] .peak-badge-chip');
+    const chipLight = fill('.peak-badge-chip');
+    const chipDark = fill('body[data-ds-dark-theme] .peak-badge-chip');
+    const cardLight = fill('.peak-badge-card');
+    const cardDark = fill('body[data-ds-dark-theme] .peak-badge-card');
     check('the light chip is filled with an opaque colour', String(solid(chipLight)), 'true');
     check('the dark chip is filled with an opaque colour too', String(solid(chipDark)), 'true');
-    check('the light and dark fills are actually different colours', String(chipLight.toLowerCase() !== chipDark.toLowerCase()), 'true');
-    check('the chip is never filled with a translucent surface token',
-      String(/\btransparent\b/.test(chipLight + chipDark)), 'false');
-    check('the card keeps its overlay fill, which the theme ships opaque',
-      String(chip('.peak-badge-card') === 'var(--dsw-alias-bg-overlay)'), 'true');
-    // 4.5:1 is WCAG AA for 12px text, and this is the pair that has to hold when the
-    // chip is a solid pill rather than a hole in the composer. `#61666b` is what
-    // --dsw-alias-label-secondary resolves to in the light theme.
-    const fill = resolve(chipLight);
-    if (/^#[0-9a-f]{6}$/i.test(fill)) {
-      const ratio = Math.round(contrast('#61666b', fill) * 10) / 10;
-      check(`the chip label clears 4.5:1 on the opaque fill (${ratio}:1)`, String(ratio >= 4.5), 'true');
+    check('the light and dark chip fills are actually different colours', String(chipLight.toLowerCase() !== chipDark.toLowerCase()), 'true');
+    check('the light card is filled with an opaque colour', String(solid(cardLight)), 'true');
+    check('the dark card is filled with an opaque colour too', String(solid(cardDark)), 'true');
+    check('the light and dark card fills are actually different colours', String(cardLight.toLowerCase() !== cardDark.toLowerCase()), 'true');
+    check('no fill is a translucent surface token',
+      String(/\btransparent\b/.test(chipLight + chipDark + cardLight + cardDark)), 'false');
+    // The specific regression: the card used to read --dsw-alias-bg-overlay, which
+    // the wallpaper plugin rewrites into a color-mix() of its glass tint, so the
+    // opened panel was see-through. The alias must not come back.
+    check('the card does not go back to the glass-rewritten overlay alias',
+      String(/--dsw-alias-bg-overlay/.test(cardLight + cardDark)), 'false');
+    // 4.5:1 is WCAG AA for 12px text, and these are the pairs that have to hold
+    // once the fills are solid instead of holes in the composer. The label colours
+    // are what --dsw-alias-label-primary / -secondary resolve to per theme, and the
+    // fills resolve through PALETTE, so a fill pointing at a token the table does
+    // not know would print here as a pair that cannot be computed.
+    const pairs = [
+      ['chip, light theme', chipLight, '#61666b'],
+      ['chip, dark theme', chipDark, '#cfd3d6'],
+      ['card, light theme', cardLight, '#0f1115'],
+      ['card, dark theme', cardDark, '#f9fafb'],
+    ];
+    for (const [label, value, ink] of pairs) {
+      const hex = resolve(value);
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) {
+        check(`${label}: the fill resolves to a known colour`, hex, hex);
+        continue;
+      }
+      const ratio = Math.round(contrast(ink, hex) * 10) / 10;
+      check(`${label}: text clears 4.5:1 on the fill (${ratio}:1)`, String(ratio >= 4.5), 'true');
     }
   }
 
@@ -455,7 +480,7 @@ if (policy !== undefined) {
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 103;
+  const FLOOR = 109;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;
