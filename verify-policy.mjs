@@ -394,15 +394,44 @@ if (policy !== undefined) {
     // background. The `[^}]*` body cannot cross a closing brace.
     const blocks = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
       .map((match) => ({ selector: match[1].trim().replace(/\s+/g, ' '), body: match[2] }));
-    // Reads the `background` of one rule, by exact selector. Named `fill` rather
+    // Reads every `background` declaration of one rule, by exact selector, in
+    // source order. A list rather than one value because the fills are written as
+    // a plain static colour first and then the tinted `color-mix()` that layers the
+    // wallpaper's own colour over it: the plain one is the fallback, the last one
+    // is what a browser that supports `color-mix()` paints. Named `fill` rather
     // than `chip` because the card goes through it too — the first version of this
-    // section only checked the chip, and the card was the surface the user
-    // actually saw go transparent.
-    const fill = (selector) => {
+    // section only checked the chip, and the card was the surface the user actually
+    // saw go transparent.
+    //
+    // The declarations are split on the semicolons that are NOT inside parentheses:
+    // a value like `color-mix(…, … calc((100% - var(--x, 0)) * 12%))` contains
+    // `[^;]+`, which stops at the first `;` it meets — including the one inside
+    // `var(--we-wallpaper-opacity, 0)` if the value were ever written without a
+    // nested call, and more importantly stops one declaration early on a multi-line
+    // value. Depth counting is what makes this read the whole declaration.
+    const declarations = (body) => {
+      const out = [];
+      let depth = 0;
+      let current = '';
+      for (const ch of body) {
+        if (ch === '(') depth += 1;
+        else if (ch === ')') depth -= 1;
+        if (ch === ';' && depth === 0) {
+          out.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      out.push(current);
+      return out.map((part) => part.trim()).filter((part) => part !== '');
+    };
+    const fills = (selector) => {
       const block = blocks.find((entry) => entry.selector === selector);
-      if (block === undefined) return '';
-      const found = block.body.match(/(?:^|;)\s*background:\s*([^;]+);/);
-      return found === null ? '' : found[1].trim();
+      if (block === undefined) return [];
+      return declarations(block.body)
+        .filter((part) => /^background\s*:/.test(part))
+        .map((part) => part.replace(/^background\s*:\s*/, '').trim());
     };
     // 0.2126R + 0.7152G + 0.0722B, the luminance term of WCAG's contrast ratio.
     const luminance = (hex) => {
@@ -417,13 +446,9 @@ if (policy !== undefined) {
       const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
       return (hi + 0.05) / (lo + 0.05);
     };
-    // "Opaque" means a solid fill: a literal colour, or a `var()` whose token comes
-    // from the STATIC palette. The shell's moving aliases are what a translucent
-    // theme rewrites, so a fill may not be one of those.
-    const solid = (value) => /^#[0-9a-f]{6}$/i.test(value) || /^var\(--dsw-static-[a-z0-9-]+\)$/.test(value);
-    // The static colours the fills are allowed to resolve to, read from the shipped
-    // theme (dsh-client-ui-theme/lib/client.js). Kept as a table so the contrast
-    // assertion below can check the real pair instead of a copy that may drift.
+    // The static colours a fill may use, read from the shipped theme
+    // (dsh-client-ui-theme/lib/client.js). Kept as a table so the contrast
+    // assertions can check the real pair instead of a copy that may drift.
     const PALETTE = {
       '--dsw-static-neutral-bluish-00': '#ffffff',
       '--dsw-static-neutral-bluish-150': '#e9ecf2',
@@ -436,43 +461,113 @@ if (policy !== undefined) {
       const token = value.match(/^var\((--dsw-static-[a-z0-9-]+)\)$/);
       return token === null ? value : (PALETTE[token[1]] ?? '');
     };
-    const chipLight = fill('.peak-badge-chip');
-    const chipDark = fill('body[data-ds-dark-theme] .peak-badge-chip');
-    const cardLight = fill('.peak-badge-card');
-    const cardDark = fill('body[data-ds-dark-theme] .peak-badge-card');
-    check('the light chip is filled with an opaque colour', String(solid(chipLight)), 'true');
-    check('the dark chip is filled with an opaque colour too', String(solid(chipDark)), 'true');
-    check('the light and dark chip fills are actually different colours', String(chipLight.toLowerCase() !== chipDark.toLowerCase()), 'true');
-    check('the light card is filled with an opaque colour', String(solid(cardLight)), 'true');
-    check('the dark card is filled with an opaque colour too', String(solid(cardDark)), 'true');
-    check('the light and dark card fills are actually different colours', String(cardLight.toLowerCase() !== cardDark.toLowerCase()), 'true');
+    // A fill is opaque when it is a literal colour, or a `var()` whose token comes
+    // from the STATIC palette. The shell's moving aliases are what a translucent
+    // theme rewrites, so a fill may not be one of those.
+    const opaque = (value) => /^#[0-9a-f]{6}$/i.test(value) || /^var\(--dsw-static-[a-z0-9-]+\)$/.test(value);
+    // The tinted fill: a static base plus the wallpaper plugin's own wall-derived
+    // colour, mixed to 100% opacity — `in srgb` with two colour arguments, no
+    // `transparent` operand, so the RESULT cannot be see-through. The weight is
+    // bounded (see the assertion below) and falls to zero when the wallpaper is
+    // fully faded, so the static base is what the default look is.
+    // Matched against the value with all whitespace removed, so the pattern can be
+    // written the way the CSS reads instead of escaping every space.
+    //
+    // The weight spelling is load-bearing, not cosmetic. Measured in the shipping
+    // engine (`.tmp-probe3.mjs`), `calc((100% - var(--we-wallpaper-opacity, 0)) *
+    // 12%)` passes `CSS.supports()` and is then SILENTLY DROPPED at computed-value
+    // time: the plain declaration above it wins, the fill is the untinted static
+    // colour, and the only visible symptom is the absence of a subtle tint — which
+    // no screenshot can distinguish. `calc(12% * (1 - var(--we-wallpaper-opacity,
+    // 0)))` resolves. Requiring the working form here is what keeps a future edit
+    // from quietly re-introducing the broken one.
+    const TINTED = /^color-mix\(insrgb,var\(--dsw-static-[a-z0-9-]+\),var\(--we-surface-tint-(?:light|dark),#[0-9a-f]{6}\)calc\((\d+(?:\.\d+)?)%\*\(1-var\(--we-wallpaper-opacity,0\)\)\)\)$/i;
+    const tintWeight = (value) => {
+      const found = value.replace(/\s+/g, '').match(TINTED);
+      return found === null ? null : Number(found[1]);
+    };
+    const chipLight = fills('.peak-badge-chip');
+    const chipDark = fills('body[data-ds-dark-theme] .peak-badge-chip');
+    const cardLight = fills('.peak-badge-card');
+    const cardDark = fills('body[data-ds-dark-theme] .peak-badge-card');
+    const surfaces = [['the light chip', chipLight], ['the dark chip', chipDark], ['the light card', cardLight], ['the dark card', cardDark]];
+    check('all four surfaces have a fill', String(surfaces.every(([, list]) => list.length > 0)), 'true');
+    check('every fill is either a static colour or the tinted opaque blend',
+      String(surfaces.every(([, list]) => list.every((value) => opaque(value) || TINTED.test(value.replace(/\s+/g, ''))))), 'true');
+    check('at least one fill carries a tint, or the knob this section exists for is gone',
+      String(surfaces.some(([, list]) => list.some((value) => tintWeight(value) !== null))), 'true');
+    // A tint strong enough to walk the fill out of its readable band is the failure
+    // mode: the point of the tint is that a solid surface still belongs to the
+    // picture, not that it repaints itself in the wallpaper's colour. Measured on a
+    // fully saturated tint, the 12px chip label holds 5.0:1 at 25% and 4.9:1 at 30%,
+    // then falls through 4.5:1 at 50%, so the ceiling sits above the weights in use
+    // and below the point where the label stops being legible.
+    const weights = surfaces.flatMap(([, list]) => list.map(tintWeight).filter((w) => w !== null));
+    check(`every tint stays under 35% (max ${Math.max(...weights)}%)`, String(weights.every((w) => w <= 35)), 'true');
+    check('the light and dark chip fills are actually different colours',
+      String(chipDark[chipDark.length - 1].toLowerCase() !== chipLight[chipLight.length - 1].toLowerCase()), 'true');
+    check('the light and dark card fills are actually different colours',
+      String(cardDark[cardDark.length - 1].toLowerCase() !== cardLight[cardLight.length - 1].toLowerCase()), 'true');
     check('no fill is a translucent surface token',
-      String(/\btransparent\b/.test(chipLight + chipDark + cardLight + cardDark)), 'false');
+      String(surfaces.some(([, list]) => list.some((value) => /\btransparent\b/.test(value)))), 'false');
     // The specific regression: the card used to read --dsw-alias-bg-overlay, which
     // the wallpaper plugin rewrites into a color-mix() of its glass tint, so the
     // opened panel was see-through. The alias must not come back.
-    check('the card does not go back to the glass-rewritten overlay alias',
-      String(/--dsw-alias-bg-overlay/.test(cardLight + cardDark)), 'false');
+    check('no fill goes back to a glass-rewritten alias',
+      String(surfaces.some(([, list]) => list.some((value) => /--dsw-alias-/.test(value)))), 'false');
     // 4.5:1 is WCAG AA for 12px text, and these are the pairs that have to hold
     // once the fills are solid instead of holes in the composer. The label colours
     // are what --dsw-alias-label-primary / -secondary resolve to per theme, and the
     // fills resolve through PALETTE, so a fill pointing at a token the table does
     // not know would print here as a pair that cannot be computed.
+    // Worst case, not the default case: the tint is what can move the fill, so the
+    // contrast is computed against a fill blended at the FULL weight (which only
+    // happens with a fully opaque wallpaper), starting from the static base. If the
+    // bounded tint cannot break 4.5:1 at full strength, no lighter weight can.
+    //
+    // The interpolation is done in LINEAR light, because that is what `color-mix()`
+    // does — mixing sRGB-encoded bytes averages them arithmetically and reports a
+    // slightly darker, more saturated result than any browser paints. Verified
+    // against a real render: the card's `#e9ecf2` + `#b98f5e` at 15% measured
+    // `#e2dedc` in the PNG, which is the plain sRGB average, while the linear
+    // computation says `#e3e1e3`. Reading the PNG is what settled it.
+    const blend = (base, tint, weight) => {
+      const parse = (hex) => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+      const toLinear = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+      const toEncoded = (v) => Math.round((v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055) * 255);
+      const from = parse(resolve(base));
+      const to = parse(tint);
+      const mixed = from.map((v, i) => toEncoded((1 - weight / 100) * toLinear(v) + (weight / 100) * toLinear(to[i])));
+      return `#${mixed.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    };
     const pairs = [
-      ['chip, light theme', chipLight, '#61666b'],
-      ['chip, dark theme', chipDark, '#cfd3d6'],
-      ['card, light theme', cardLight, '#0f1115'],
-      ['card, dark theme', cardDark, '#f9fafb'],
+      ['chip, light theme', chipLight, '#ffffff', '#61666b'],
+      ['chip, dark theme', chipDark, '#2c2c2e', '#cfd3d6'],
+      ['card, light theme', cardLight, '#e9ecf2', '#0f1115'],
+      ['card, dark theme', cardDark, '#232324', '#f9fafb'],
     ];
-    for (const [label, value, ink] of pairs) {
-      const hex = resolve(value);
-      if (!/^#[0-9a-f]{6}$/i.test(hex)) {
-        check(`${label}: the fill resolves to a known colour`, hex, hex);
+    for (const [label, list, tint, ink] of pairs) {
+      const base = list[0];
+      const weight = list.map(tintWeight).filter((w) => w !== null).pop() ?? 0;
+      if (!/^#[0-9a-f]{6}$/i.test(resolve(base))) {
+        check(`${label}: the fill resolves to a known colour`, resolve(base), resolve(base));
         continue;
       }
-      const ratio = Math.round(contrast(ink, hex) * 10) / 10;
-      check(`${label}: text clears 4.5:1 on the fill (${ratio}:1)`, String(ratio >= 4.5), 'true');
+      const worst = blend(base, tint, weight);
+      const ratio = Math.round(contrast(ink, worst) * 10) / 10;
+      check(`${label}: text clears 4.5:1 even at full tint (${ratio}:1)`, String(ratio >= 4.5), 'true');
     }
+    // Proof that the assertions above are not idle. The wallpaper plugin clamps its
+    // published tint into a readable band, but the fills are tested here against a
+    // neutral `#ffffff` / `#2c2c2e`, so the interesting case is a saturated wall.
+    // `#f59e0b` is the theme's own amber (--dsw-alias-state-warn-primary), picked
+    // because it is the most saturated colour this component already trusts.
+    // Measured: 25% keeps 5.0:1 while 50% drops to 4.3:1, so the ceiling above is
+    // the thing standing between a tinted chip and an unreadable one.
+    const atWeight = (weight) => contrast('#61666b', blend('#ffffff', '#f59e0b', weight));
+    check('a saturated tint at the real weight still clears 4.5:1', String(atWeight(25) >= 4.5), 'true');
+    check('a saturated tint at half strength would not clear it, so the bound is load-bearing',
+      String(atWeight(50) < 4.5), 'true');
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);
@@ -480,7 +575,7 @@ if (policy !== undefined) {
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 109;
+  const FLOOR = 111;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;

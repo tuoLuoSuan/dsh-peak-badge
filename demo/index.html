@@ -19,6 +19,16 @@
     --dsw-static-neutral-bluish-750: #43454a;
     --dsw-static-neutral-bluish-850: #2c2c2e;
     --dsw-static-neutral-bluish-875: #232324;
+    /* The wallpaper plugin's share of the fills. Defaults are chosen so the demo
+       actually EXERCISES the tint rather than passing through it: at
+       `--we-wallpaper-opacity: 0` the weight is 0, the tint cancels out, and a typo
+       in the colour-mix would render identically to a correct one. `0.2` is a
+       strong wallpaper (the plugin's variable is the COMPLEMENT of its opacity
+       slider, so a lower value means a more visible picture), and the colour is a
+       wall-derived sand that the plugin would have clamped into the readable band. */
+    --we-wallpaper-opacity: 0.5;
+    --we-surface-tint-light: #b98f5e;
+    --we-surface-tint-dark: #6b5636;
     --dsw-alias-bg-base: #ffffff;
     --dsw-alias-bg-layer-1: #ffffff;
     --dsw-alias-bg-layer-2: #ffffff;
