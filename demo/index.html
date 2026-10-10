@@ -160,7 +160,7 @@
 <script>
   const params = new URLSearchParams(location.search);
   const theme = params.get('theme') === 'dark' ? 'dark' : 'light';
-  const view = ['chip', 'card'].includes(params.get('view')) ? params.get('view') : 'composer';
+  const view = ['chip', 'card', 'toast'].includes(params.get('view')) ? params.get('view') : 'composer';
   const peak = params.get('state') === 'peak';
   const en = params.get('lang') === 'en';
   document.body.dataset.theme = theme;
@@ -184,6 +184,13 @@
       rateStandard: '标准价', rateOffPeak: '5 折 · 半价',
       peakReason: '工作日高峰时段，当前按标准价计价。',
       offReason: '工作日非高峰时段，当前按空闲时段计价。',
+      alertLead: '切换提醒', alertOff: '关闭', alertMinutes: '提前 {n} 分钟',
+      notify: '系统通知', notifyHint: '开启时浏览器会询问一次权限。',
+      alertToPeak: '{at} 进入高峰时段',
+      alertToOff: '{at} 进入空闲时段',
+      alertToPeakBody: '还有 {left}。价格翻倍，要发就趁现在。',
+      alertToOffBody: '还有 {left}。价格减半，不急就等一下。',
+      dismiss: '关闭提醒',
     },
     en: {
       peak: 'Peak', off: 'Off-peak', title: 'DeepSeek peak / off-peak', state: 'Now',
@@ -192,6 +199,13 @@
       rateStandard: 'standard rate', rateOffPeak: '50% · half price',
       peakReason: 'Peak window on a working day, currently billed at the standard rate.',
       offReason: 'Off-peak window on a working day, currently billed at the off-peak rate.',
+      alertLead: 'Warn before', alertOff: 'Off', alertMinutes: '{n} min before',
+      notify: 'System notification', notifyHint: 'The browser will ask for permission once.',
+      alertToPeak: 'Peak starts at {at}',
+      alertToOff: 'Off-peak starts at {at}',
+      alertToPeakBody: 'In {left}. The rate doubles — send now if you are going to send.',
+      alertToOffBody: 'In {left}. The rate halves — wait a moment if you can.',
+      dismiss: 'Dismiss',
     },
   }[en ? 'en' : 'zh'];
 
@@ -224,7 +238,64 @@
     el('span', { class: 'peak-badge-key', text: label }),
     el('span', { class: 'peak-badge-value', 'data-tone': tone, text: value }));
 
+  // The two settings the card grew. Same markup as `renderAlertControls` in
+  // client.js, scaled down to the one value each control is being photographed
+  // at: the real select carries all seven choices, the real checkbox carries the
+  // browser's own permission state.
+  const LEAD = 2;
+  const alertControls = () => el('div', { class: 'peak-badge-controls' },
+    el('div', { class: 'peak-badge-control' },
+      el('label', { class: 'peak-badge-key', for: 'peak-badge-alert-lead', text: COPY.alertLead }),
+      (() => {
+        const select = el('select', { class: 'peak-badge-select', id: 'peak-badge-alert-lead', 'data-dsh-peak-badge': 'alert-lead' });
+        for (const minutes of [0, 1, 2, 5, 10, 15, 30]) {
+          const option = el('option', {
+            value: String(minutes),
+            text: minutes === 0 ? COPY.alertOff : COPY.alertMinutes.replace('{n}', String(minutes)),
+          });
+          if (minutes === LEAD) option.setAttribute('selected', '');
+          select.append(option);
+        }
+        return select;
+      })()),
+    el('div', { class: 'peak-badge-control' },
+      el('label', { class: 'peak-badge-check' },
+        el('input', { type: 'checkbox', 'data-dsh-peak-badge': 'alert-notify' }),
+        el('span', { text: COPY.notify }))),
+    el('div', { class: 'peak-badge-hint', text: COPY.notifyHint }));
+
+  function renderCard() {
+    return el('div', {
+      class: 'peak-badge-card', 'data-dsh-peak-badge': 'card', role: 'dialog',
+      'aria-label': COPY.title,
+    },
+      row(COPY.state, `${SAMPLE.label} · ${SAMPLE.dateText} ${COPY.weekday[SAMPLE.weekday]}`, SAMPLE.status),
+      row(COPY.discount, SAMPLE.rate, SAMPLE.status),
+      row(COPY.next, SAMPLE.next, undefined),
+      row(COPY.schedule, '09:00–12:00 · 14:00–18:00', undefined),
+      alertControls(),
+      el('div', { class: 'peak-badge-foot', text: SAMPLE.reason }));
+  }
+
+  function renderToast() {
+    const entering = peak ? 'peak' : 'off';
+    const title = (peak ? COPY.alertToPeak : COPY.alertToOff).replace('{at}', peak ? '14:00' : '18:00');
+    const body = (peak ? COPY.alertToPeakBody : COPY.alertToOffBody).replace('{left}', en ? '2 min' : '2 分钟');
+    document.getElementById('seat').append(el('div', {
+      class: 'peak-badge-toast', 'data-dsh-peak-badge': 'toast', 'data-entering': entering, role: 'status',
+    },
+      el('span', { class: 'peak-badge-dot', 'aria-hidden': 'true' }),
+      el('div', { class: 'peak-badge-toasttext' },
+        el('div', { class: 'peak-badge-toasttitle', text: title }),
+        el('div', { text: body })),
+      el('button', { type: 'button', class: 'peak-badge-toastclose', 'aria-label': COPY.dismiss, text: '×' })));
+  }
+
   function render() {
+    if (view === 'toast') {
+      renderToast();
+      return;
+    }
     const seat = document.getElementById('seat');
     seat.textContent = '';
     const showCard = view === 'card';
@@ -236,17 +307,7 @@
       },
         el('span', { class: 'peak-badge-dot', 'aria-hidden': 'true' }),
         el('span', { text: SAMPLE.label })));
-    if (showCard) {
-      root.append(el('div', {
-        class: 'peak-badge-card', 'data-dsh-peak-badge': 'card', role: 'dialog',
-        'aria-label': COPY.title,
-      },
-        row(COPY.state, `${SAMPLE.label} · ${SAMPLE.dateText} ${COPY.weekday[SAMPLE.weekday]}`, SAMPLE.status),
-        row(COPY.discount, SAMPLE.rate, SAMPLE.status),
-        row(COPY.next, SAMPLE.next, undefined),
-        row(COPY.schedule, '09:00–12:00 · 14:00–18:00', undefined),
-        el('div', { class: 'peak-badge-foot', text: SAMPLE.reason })));
-    }
+    if (showCard) root.append(renderCard());
     seat.append(root);
   }
 

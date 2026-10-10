@@ -323,6 +323,49 @@ window.__ModuleLoader__.load({
       return offPeak('workingDayOff');
     }
 
+    /**
+     * What to warn about, or null when there is nothing worth saying.
+     *
+     * The rate is decided by the moment a request is *sent*, so a switch two
+     * minutes away is a decision the user can still act on: sending now pays the
+     * old rate, sending after pays the new one. That is the whole reason this
+     * function exists — the chip already answers "what is the rate now", and the
+     * card already answers "when does it change".
+     *
+     * Pure on purpose, like the rest of this region: `verify-policy.mjs` runs the
+     * region on its own, so nothing here may reach for a clock, a document or a
+     * language table. The caller supplies `leadMinutes`.
+     *
+     * `key` names the *boundary*, not the moment it was noticed. The clock ticks
+     * every 30s, so a two-minute lead is observed four times; without a stable
+     * key the toast would be re-issued on every tick and the remaining minutes
+     * would visibly count down inside a notice the user cannot dismiss. The date
+     * plus the day offset plus the clock time is exactly the identity of one
+     * window edge, and it retires itself at the Beijing day rollover.
+     *
+     * @param state - a verdict from `peakState`.
+     * @param leadMinutes - how long before the switch to speak up; 0 disables.
+     */
+    function alertPlan(state, leadMinutes) {
+      if (!(leadMinutes > 0)) return null;
+      if (state === undefined || state === null) return null;
+      // An unknown verdict has no `next` by construction, but say so out loud:
+      // a table-exhausted year must never be announced as an imminent switch.
+      if (state.status !== 'peak' && state.status !== 'off') return null;
+      const next = state.next;
+      if (next === undefined || next === null) return null;
+      if (next.leftMinutes > leadMinutes) return null;
+      return {
+        key: `${state.dateText}|${next.inDays}|${next.at}`,
+        // A boundary always lands on the other side of it, so the destination is
+        // the complement of where we are. Only one of the two saves money.
+        entering: state.status === 'peak' ? 'off' : 'peak',
+        at: next.at,
+        inDays: next.inDays,
+        leftMinutes: next.leftMinutes,
+      };
+    }
+
     // #endregion
 
     // #region styles
@@ -471,6 +514,62 @@ body[data-ds-dark-theme] .peak-badge-card {
 .peak-badge-value[data-tone="peak"] { color: var(--dsw-alias-state-warn-primary); }
 .peak-badge-value[data-tone="off"] { color: var(--dsw-alias-label-secondary); }
 .peak-badge-foot { font-size: 11px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+/* The two settings rows. They sit under the facts and above the sentence, and
+   they are the only interactive part of the card — which is why the card keeps
+   `role="dialog"` rather than pretending to be a menu. */
+.peak-badge-controls {
+  display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 6px;
+}
+.peak-badge-control { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+.peak-badge-select {
+  font: inherit; font-size: 12px; height: 22px; padding: 0 4px; box-sizing: border-box; cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-static-neutral-bluish-00);
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px;
+}
+body[data-ds-dark-theme] .peak-badge-select { background: var(--dsw-static-neutral-bluish-850); }
+.peak-badge-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 12px; color: var(--dsw-alias-label-primary); cursor: pointer;
+}
+.peak-badge-check[data-unavailable="yes"] { color: var(--dsw-alias-label-secondary); cursor: default; }
+.peak-badge-check input { width: 14px; height: 14px; margin: 0; accent-color: var(--dsw-alias-brand-primary, #4176e6); }
+.peak-badge-hint { font-size: 11px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+/* The pre-switch notice.
+   Fixed to the viewport, not to the chip: the clock that raises it runs whether
+   or not a conversation is open, so the notice has to be able to appear when the
+   chip is not on screen at all. Same corner and stacking order as the skill
+   centre's toasts, because two plugins of one family should not disagree about
+   where a transient message goes.
+   The surface is --dsw-alias-toast-bg, DSH's own toast token, and it is dark in
+   BOTH themes — so the ink is a static light palette entry, never a flipping
+   label alias. (That mistake is what shipped black-on-black in the sibling
+   plugin.) */
+.peak-badge-toast {
+  position: fixed; right: 20px; bottom: 20px; z-index: 2147483002;
+  width: 304px; box-sizing: border-box; padding: 10px 12px;
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12px; line-height: 1.5;
+  color: var(--dsw-static-neutral-bluish-00, #fff);
+  background: var(--dsw-alias-toast-bg, #353638);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .24);
+}
+/* The dot reuses the chip's shape rule. A notice about money should be
+   recognisable as the same object as the chip it belongs to. */
+.peak-badge-toast > .peak-badge-dot { margin-top: 5px; flex: none; color: var(--dsw-static-neutral-bluish-300, #cfd3d6); }
+.peak-badge-toast[data-entering="peak"] > .peak-badge-dot { color: var(--dsw-static-amber-400, #f7ad31); }
+.peak-badge-toast[data-entering="off"] > .peak-badge-dot { color: var(--dsw-static-green-400, #4ed17e); }
+.peak-badge-toasttext { flex: 1; min-width: 0; }
+.peak-badge-toasttitle { font-weight: 600; }
+.peak-badge-toastclose {
+  flex: none; width: 18px; height: 18px; padding: 0; margin: -1px -2px 0 0; box-sizing: border-box;
+  font: inherit; font-size: 14px; line-height: 1; cursor: pointer;
+  color: inherit; background: transparent; border: 0; border-radius: 5px; opacity: .7;
+}
+.peak-badge-toastclose:hover { opacity: 1; background: rgba(255, 255, 255, .16); }
 `;
 
     /**
@@ -527,6 +626,18 @@ body[data-ds-dark-theme] .peak-badge-card {
       weekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
       rateStandard: '标准价',
       rateOffPeak: '5 折 · 半价',
+      alertLead: '切换提醒',
+      alertOff: '关闭',
+      alertMinutes: '提前 {n} 分钟',
+      notify: '系统通知',
+      notifyUnsupported: '本机不支持系统通知',
+      notifyDenied: '浏览器已拒绝通知权限',
+      notifyHint: '开启时浏览器会询问一次权限。',
+      alertToPeak: '{at} 进入高峰时段',
+      alertToOff: '{at} 进入空闲时段',
+      alertToPeakBody: '还有 {left}。价格翻倍，要发就趁现在。',
+      alertToOffBody: '还有 {left}。价格减半，不急就等一下。',
+      dismiss: '关闭提醒',
     };
     const TEXT_EN = {
       peak: 'Peak',
@@ -550,6 +661,18 @@ body[data-ds-dark-theme] .peak-badge-card {
       weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
       rateStandard: 'standard rate',
       rateOffPeak: '50% · half price',
+      alertLead: 'Warn before',
+      alertOff: 'Off',
+      alertMinutes: '{n} min before',
+      notify: 'System notification',
+      notifyUnsupported: 'not available in this browser',
+      notifyDenied: 'the browser refused permission',
+      notifyHint: 'The browser will ask for permission once.',
+      alertToPeak: 'Peak starts at {at}',
+      alertToOff: 'Off-peak starts at {at}',
+      alertToPeakBody: 'In {left}. The rate doubles — send now if you are going to send.',
+      alertToOffBody: 'In {left}. The rate halves — wait a moment if you can.',
+      dismiss: 'Dismiss',
     };
 
     // The policy region returns a reason *key* plus its parameters; the sentence
@@ -665,6 +788,208 @@ body[data-ds-dark-theme] .peak-badge-card {
 
     // #endregion
 
+    // #region alert
+
+    const ALERT_STORE_KEY = `${PACKAGE_ID}/alert`;
+    const ALERT_SELECT_ID = `${PACKAGE_ID}-alert-lead`;
+    // Fixed rungs rather than a number field: the useful range is two orders of
+    // magnitude wide (a minute to half an hour) and every value in between is a
+    // decision nobody wants to make. 0 is the off switch, and it is first because
+    // that is where a `<select>`'s eye starts.
+    const ALERT_CHOICES = [0, 1, 2, 5, 10, 15, 30];
+    const ALERT_DEFAULT_MINUTES = 2;
+    const TOAST_MS = 20000;
+
+    /**
+     * The two preferences, plus the three things that have to outlive a mount.
+     *
+     * Module scope on purpose. The clock is started by `apply` while the chip may
+     * mount, unmount and remount many times across one session — and a switch that
+     * has already been announced must not be announced again merely because the
+     * user changed conversations.
+     */
+    const alert = { leadMinutes: ALERT_DEFAULT_MINUTES, notify: false };
+    let announcedKey = null;
+    let toastNode = null;
+    let toastDispose = null;
+    let alertTimer = null;
+
+    /** Read the stored preference, tolerating every way storage can refuse. */
+    function readAlertSettings() {
+      // `localStorage` throws outright in a partitioned or storage-blocked frame
+      // and returns null for a key that was never written. Neither is worth
+      // reporting: the defaults are what a first run would have chosen anyway.
+      try {
+        const raw = window.localStorage.getItem(ALERT_STORE_KEY);
+        if (raw === null) return;
+        const parsed = JSON.parse(raw);
+        if (parsed === null || typeof parsed !== 'object') return;
+        // Validated rather than trusted: a stored 3 would make the select render
+        // no matching option and silently show the first one instead.
+        if (ALERT_CHOICES.includes(parsed.leadMinutes)) alert.leadMinutes = parsed.leadMinutes;
+        if (parsed.notify === true) alert.notify = true;
+      } catch {
+        /* private mode, disabled storage, or a half-written value */
+      }
+    }
+
+    function writeAlertSettings() {
+      try {
+        window.localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({
+          leadMinutes: alert.leadMinutes,
+          notify: alert.notify,
+        }));
+      } catch {
+        /* the preference still applies for this session */
+      }
+    }
+
+    /**
+     * What the system-notification row can actually do.
+     *
+     * Three outcomes, not two. The API is absent in a headless shell, and it can
+     * be present-but-refused in a frame that was never granted `notifications`, so
+     * every reach is guarded — and the card names which case it is rather than
+     * offering a checkbox that quietly does nothing.
+     */
+    function notifySupport() {
+      if (typeof window === 'undefined' || typeof window.Notification !== 'function') return 'unsupported';
+      try {
+        if (window.Notification.permission === 'denied') return 'denied';
+        if (window.Notification.permission === 'granted') return 'granted';
+        return 'prompt';
+      } catch {
+        return 'unsupported';
+      }
+    }
+
+    function closeToast() {
+      if (typeof toastDispose === 'function') {
+        toastDispose();
+        toastDispose = null;
+      }
+      if (toastNode !== null) {
+        if (toastNode.parentNode !== null) toastNode.parentNode.removeChild(toastNode);
+        toastNode = null;
+      }
+    }
+
+    /**
+     * Raise the pre-switch notice.
+     *
+     * Plain DOM rather than React, because this is raised by the plugin's own
+     * clock and not from inside any React tree: the chip mounts only on a
+     * conversation page, and a notice that appeared only there would be missing
+     * exactly when the user is reading something else and about to start a job.
+     * Building it here also keeps the component a pure function of the verdict.
+     */
+    function showToast(plan) {
+      closeToast();
+      if (typeof document === 'undefined' || document.body === null || document.body === undefined) return;
+      ensureStyles();
+      const toPeak = plan.entering === 'peak';
+      const node = document.createElement('div');
+      node.className = 'peak-badge-toast';
+      node.dataset.dshPeakBadge = 'toast';
+      node.dataset.entering = plan.entering;
+      // `status`, not `alert`: worth a glance, not worth interrupting typing.
+      node.setAttribute('role', 'status');
+
+      const dot = document.createElement('span');
+      dot.className = 'peak-badge-dot';
+      dot.setAttribute('aria-hidden', 'true');
+
+      const body = document.createElement('div');
+      body.className = 'peak-badge-toasttext';
+      const heading = document.createElement('div');
+      heading.className = 'peak-badge-toasttitle';
+      heading.textContent = fill(toPeak ? text.alertToPeak : text.alertToOff, { at: plan.at });
+      const detail = document.createElement('div');
+      detail.textContent = fill(toPeak ? text.alertToPeakBody : text.alertToOffBody, {
+        left: formatGap(plan.leftMinutes),
+      });
+      body.append(heading, detail);
+
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'peak-badge-toastclose';
+      close.setAttribute('aria-label', text.dismiss);
+      close.textContent = '×';
+      close.addEventListener('click', closeToast);
+
+      node.append(dot, body, close);
+      document.body.append(node);
+      toastNode = node;
+      // Auto-dismiss runs on the timer service, never on a bare `setTimeout`:
+      // bundle code executes in a client half, where the ambient timer globals are
+      // trapped. Keeping the dispose is what lets a second notice replace this one
+      // instead of stacking beneath it.
+      if (alertTimer !== null) toastDispose = alertTimer.timeout(closeToast, TOAST_MS);
+    }
+
+    function fireSystemNotification(plan) {
+      if (!alert.notify) return;
+      if (notifySupport() !== 'granted') return;
+      try {
+        const toPeak = plan.entering === 'peak';
+        // eslint-disable-next-line no-new -- the notice is the side effect
+        new window.Notification(fill(toPeak ? text.alertToPeak : text.alertToOff, { at: plan.at }), {
+          body: fill(toPeak ? text.alertToPeakBody : text.alertToOffBody, {
+            left: formatGap(plan.leftMinutes),
+          }),
+          // Same tag for the same boundary, so a re-fire replaces the notice
+          // rather than leaving the user with two of them.
+          tag: `${PACKAGE_ID}:${plan.key}`,
+        });
+      } catch (error) {
+        console.error('[peak-badge] the system notification could not be raised', error);
+      }
+    }
+
+    /**
+     * Start the pre-switch clock and return its unsubscriber.
+     *
+     * Owned by `apply`, not by the chip, because the chip only exists while a
+     * conversation page is mounted. The decision itself stays pure — `peakState`
+     * then `alertPlan` — so this function supplies nothing but the time and the
+     * memory of what it has already said.
+     */
+    function startAlertClock(ctx, timer) {
+      // Claimed here rather than by the caller, so the notice can never be raised
+      // before something owns its auto-dismiss. `startAlertClock` announces once
+      // synchronously, so a caller that assigned this *after* the call would get a
+      // notice with no timer behind it — a toast that never leaves.
+      alertTimer = timer;
+      const announce = () => {
+        // A client half can in principle run before the document has a body. If it
+        // has, say nothing and leave the edge un-announced, so the next tick tries
+        // again instead of burning the one chance to speak.
+        if (typeof document === 'undefined' || document.body === null || document.body === undefined) return;
+        let state;
+        try {
+          state = peakState(Date.now());
+        } catch (error) {
+          console.error('[peak-badge] the alert clock could not read the time', error);
+          return;
+        }
+        const plan = alertPlan(state, alert.leadMinutes);
+        if (plan === null || plan.key === announcedKey) return;
+        announcedKey = plan.key;
+        // Re-localize on the way out. The chip's own locale subscription only runs
+        // while the chip is mounted and this clock is not, so a language switched
+        // on another page would otherwise be spoken here in the old one.
+        localize(ctx);
+        showToast(plan);
+        fireSystemNotification(plan);
+      };
+      // One pass immediately: a plugin enabled two minutes before a switch should
+      // say so at once rather than at the first tick thirty seconds later.
+      announce();
+      return timer.interval(announce, TICK_MS);
+    }
+
+    // #endregion
+
     // #region view
 
     function Row(props) {
@@ -677,6 +1002,91 @@ body[data-ds-dark-theme] .peak-badge-card {
     function Detail(props) {
       if (props.value === null || props.value === undefined) return null;
       return h(Row, { label: props.label, value: props.value, tone: props.tone });
+    }
+
+    /**
+     * The card's two settings rows: how long before a switch to speak up, and
+     * whether to also raise a system notification.
+     *
+     * A plain function rather than a component — it holds no state of its own and
+     * the card already re-renders on the tick, so a component would only add a
+     * boundary React has to reconcile for nothing.
+     */
+    function renderAlertControls(setTick) {
+      const support = notifySupport();
+      const usable = support === 'prompt' || support === 'granted';
+      const rerender = () => setTick((value) => value + 1);
+
+      const chooseLead = (event) => {
+        alert.leadMinutes = Number(event.target.value);
+        writeAlertSettings();
+        // Not a new switch, but a longer lead can make an already-announced edge
+        // newly due and a shorter one can push it back out. Clearing the key lets
+        // the next tick decide again under the new rule rather than staying silent
+        // about a boundary it had already spoken for.
+        announcedKey = null;
+        rerender();
+      };
+
+      const chooseNotify = (event) => {
+        if (event.target.checked !== true) {
+          alert.notify = false;
+          writeAlertSettings();
+          rerender();
+          return;
+        }
+        // Permission has to be asked for from a user gesture and this is one, and
+        // the ANSWER is what gets stored: a refusal must turn the box back off
+        // rather than leave a setting behind that can never fire. Older engines
+        // return undefined from `requestPermission()` and expect a callback, so
+        // both shapes are accepted and neither is assumed.
+        const settle = (granted) => {
+          alert.notify = granted === true;
+          writeAlertSettings();
+          rerender();
+        };
+        try {
+          const asked = window.Notification.requestPermission();
+          if (asked !== null && asked !== undefined && typeof asked.then === 'function') {
+            asked.then(settle, () => settle(false));
+          } else {
+            settle(window.Notification.permission === 'granted');
+          }
+        } catch {
+          settle(false);
+        }
+      };
+
+      return h('div', { className: 'peak-badge-controls' },
+        h('div', { className: 'peak-badge-control' },
+          h('label', { className: 'peak-badge-key', htmlFor: ALERT_SELECT_ID }, text.alertLead),
+          h('select', {
+            id: ALERT_SELECT_ID,
+            className: 'peak-badge-select',
+            'data-dsh-peak-badge': 'alert-lead',
+            value: String(alert.leadMinutes),
+            onChange: chooseLead,
+          }, ALERT_CHOICES.map((minutes) => h('option', { key: minutes, value: String(minutes) },
+            minutes === 0 ? text.alertOff : fill(text.alertMinutes, { n: minutes }))))),
+        h('div', { className: 'peak-badge-control' },
+          h('label', {
+            className: 'peak-badge-check',
+            'data-unavailable': usable ? 'no' : 'yes',
+          },
+            h('input', {
+              type: 'checkbox',
+              'data-dsh-peak-badge': 'alert-notify',
+              checked: alert.notify,
+              disabled: !usable,
+              onChange: chooseNotify,
+            }),
+            h('span', null, text.notify))),
+        usable
+          ? null
+          : h('div', { className: 'peak-badge-hint' }, support === 'denied' ? text.notifyDenied : text.notifyUnsupported),
+        usable && support === 'prompt' && !alert.notify
+          ? h('div', { className: 'peak-badge-hint' }, text.notifyHint)
+          : null);
     }
 
     const Main = React.memo(function PeakBadge() {
@@ -771,8 +1181,12 @@ body[data-ds-dark-theme] .peak-badge-card {
        * card lands on a child; capture means a handler inside the card that stops
        * propagation cannot make this one stale.
        *
-       * Unmounting here is safe: the card is not interactive, and `pointerdown`
-       * precedes the mouseup that a button inside it would need.
+       * The containment test is what keeps this compatible with a card that now
+       * holds controls: the lead `<select>` and the notification checkbox live
+       * inside the root, so pressing either one leaves the card open — while a
+       * press on the body behind it closes, because `pointerdown` on a `<select>`
+       * opens the native menu and unmounting the card out from under it would be
+       * indistinguishable from the control being broken.
        */
       React.useEffect(() => {
         if (!open) return undefined;
@@ -828,6 +1242,7 @@ body[data-ds-dark-theme] .peak-badge-card {
               h(Detail, { label: text.discount, value: rate, tone: status }),
               h(Detail, { label: text.next, value: nextText }),
               h(Detail, { label: text.schedule, value: status === 'unknown' ? null : state.schedule }),
+              renderAlertControls(setTick),
               h('div', { className: 'peak-badge-foot' }, reasonSentence(state)))
           : null);
     });
@@ -844,6 +1259,32 @@ body[data-ds-dark-theme] .peak-badge-card {
       apply(ctx) {
         pluginCtx = ctx;
         localize(ctx);
+        readAlertSettings();
+        // The pre-switch clock is started here rather than from the chip's effect,
+        // because the chip exists only while a conversation page is mounted and the
+        // warning has to be able to arrive while the user is looking at something
+        // else. `ctx.effect` ties its lifetime to the plugin's own.
+        try {
+          ctx.effect(() => {
+            const timer = ctx.get('timer');
+            // Both the lookup and the interval live inside the effect: a disposed
+            // context throws INACTIVE_EFFECT from every timer method rather than
+            // returning nothing.
+            if (timer === undefined || typeof timer.interval !== 'function') return () => {};
+            // `startAlertClock` claims the timer for itself before announcing, so
+            // there is nothing to assign out here.
+            const stop = startAlertClock(ctx, timer);
+            return () => {
+              if (typeof stop === 'function') stop();
+              alertTimer = null;
+              closeToast();
+            };
+          }, `${PACKAGE_ID}: alert clock`);
+        } catch (error) {
+          // A badge with no warning still beats a plugin that fails to apply: the
+          // chip and the card are unaffected by this clock being unavailable.
+          console.error('[peak-badge] the alert clock could not be started', error);
+        }
         // The `try` matters even though this is the plugin's own mount path: an
         // `apply` that throws takes the whole entry down, and a slot can be
         // *declared by another package* whose entry is not active (the settings

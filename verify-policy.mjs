@@ -41,7 +41,7 @@ if (source !== undefined) {
     fail(2, 'client.js no longer has a "#region policy" ... "#endregion" block, so the policy could not be extracted. This says nothing about whether it is correct.');
   } else {
     try {
-      policy = new Function(`${source.slice(start, end)}\nreturn { peakState, offPeakReach, holidayLookup, HOLIDAY_TABLE, HOLIDAY_COVERAGE, LATEST_COVERED_YEAR, PEAK_WINDOWS, mdKey, hhmm };`)();
+      policy = new Function(`${source.slice(start, end)}\nreturn { peakState, offPeakReach, alertPlan, holidayLookup, HOLIDAY_TABLE, HOLIDAY_COVERAGE, LATEST_COVERED_YEAR, PEAK_WINDOWS, mdKey, hhmm };`)();
     } catch (error) {
       fail(1, `the extracted policy does not evaluate: ${error.message}`);
     }
@@ -49,7 +49,7 @@ if (source !== undefined) {
 }
 
 if (policy !== undefined) {
-  const { peakState, holidayLookup, HOLIDAY_COVERAGE, LATEST_COVERED_YEAR } = policy;
+  const { peakState, holidayLookup, alertPlan, HOLIDAY_COVERAGE, LATEST_COVERED_YEAR } = policy;
   if (process.argv.includes('--dump')) {
     const start = source.indexOf('// #region policy');
     const end = source.indexOf('// #endregion', start);
@@ -570,12 +570,279 @@ if (policy !== undefined) {
       String(atWeight(50) < 4.5), 'true');
   }
 
+  console.log('\n--- the pre-switch warning ---');
+  // The rate is fixed at the moment a request is SENT, so the only useful thing a
+  // warning can say is "the edge is N minutes away". Everything asserted here is
+  // the decision; the sentence and the 今天/明天 wording belong to the view.
+  {
+    const planAt = (y, m, d, hh, mm, lead) => alertPlan(peakState(beijing(y, m, d, hh, mm)), lead);
+    const summary = (plan) => (plan === null
+      ? 'null'
+      : `${plan.entering} @ ${plan.at} +${plan.inDays}d in ${plan.leftMinutes}min`);
+
+    // 2026-08-19 is a Wednesday, the anchor the verdict section already uses.
+    check('two minutes before the morning peak, a 2-minute lead fires',
+      summary(planAt(2026, 8, 19, 11, 58, 2)), 'off @ 12:00 +0d in 2min');
+    check('the same moment with a 1-minute lead stays quiet',
+      summary(planAt(2026, 8, 19, 11, 58, 1)), 'null');
+    check('three minutes out with a 2-minute lead stays quiet',
+      summary(planAt(2026, 8, 19, 11, 57, 2)), 'null');
+    check('the lead is inclusive, not exclusive',
+      String(planAt(2026, 8, 19, 11, 58, 2) === null), 'false');
+    check('the noon break is announced as the peak coming back',
+      summary(planAt(2026, 8, 19, 13, 58, 2)), 'peak @ 14:00 +0d in 2min');
+    check('the end of the afternoon peak is announced as money saved',
+      summary(planAt(2026, 8, 19, 17, 59, 2)), 'off @ 18:00 +0d in 1min');
+    check('a Friday evening edge is still announced',
+      summary(planAt(2026, 8, 21, 17, 59, 2)), 'off @ 18:00 +0d in 1min');
+    check('a working evening points at tomorrow morning',
+      summary(planAt(2026, 8, 19, 20, 0, 1000)), 'peak @ 09:00 +1d in 780min');
+    check('thirty minutes does not reach tomorrow morning',
+      summary(planAt(2026, 8, 19, 20, 0, 30)), 'null');
+    check('a weekend points at Monday, two days out',
+      summary(planAt(2026, 8, 22, 10, 0, 3000)), 'peak @ 09:00 +2d in 2820min');
+
+    // The dedupe key. This is the property the whole notice rests on: the clock
+    // ticks every 30 s, so a stable key is what stops one edge being announced
+    // four times with a visibly shrinking number.
+    const keyAt = (y, m, d, hh, mm, lead) => {
+      const plan = planAt(y, m, d, hh, mm, lead);
+      return plan === null ? 'null' : plan.key;
+    };
+    check('two observations of one edge share a key',
+      String(keyAt(2026, 8, 19, 11, 58, 5) === keyAt(2026, 8, 19, 11, 59, 5)), 'true');
+    check('one clock time on different days does not share one',
+      String(keyAt(2026, 8, 19, 11, 58, 5) === keyAt(2026, 8, 20, 11, 58, 5)), 'false');
+    // Two edges inside one Beijing day. Asked for explicitly rather than through
+    // `keyAt`, because comparing two *absences* would pass this for the wrong
+    // reason: "no plan" is shared by every moment that has nothing to say.
+    const noonEdge = planAt(2026, 8, 19, 12, 30, 120);
+    const eveningEdge = planAt(2026, 8, 19, 18, 30, 1200);
+    check('both of the day\'s edges do produce a plan',
+      `${noonEdge === null ? 'none' : noonEdge.at}/${eveningEdge === null ? 'none' : eveningEdge.at}`,
+      '14:00/09:00');
+    check('the two edges do not share a key', String(noonEdge.key !== eveningEdge.key), 'true');
+
+    // Every way of having nothing to say.
+    check('a lead of zero disables the warning', String(alertPlan(peakState(beijing(2026, 8, 19, 11, 58)), 0)), 'null');
+    check('a negative lead disables it too', String(alertPlan(peakState(beijing(2026, 8, 19, 11, 58)), -5)), 'null');
+    check('a missing state says nothing', String(alertPlan(undefined, 30)), 'null');
+    check('a null state says nothing', String(alertPlan(null, 30)), 'null');
+    // The table-exhausted verdict has no `next` at all, and it must never be
+    // dressed up as an imminent switch.
+    const exhausted = peakState(beijing(2027, 3, 10, 10, 0));
+    check('an uncovered year still reports unknown', exhausted.status, 'unknown');
+    check('an unknown verdict is never announced', String(alertPlan(exhausted, 30)), 'null');
+  }
+
+  console.log('\n--- the alert clock ---');
+  // The verdict above is pure; the clock around it is not. What is asserted here
+  // is the part a screenshot cannot show and a reader cannot see: that one edge is
+  // announced once, that the announcement survives the clock ticking, and that
+  // the toast and the system notice are wired to the preferences at all.
+  //
+  // The clock is driven through the real `#region alert` code, extracted the same
+  // way the policy is, over a DOM small enough to read.
+  {
+    const ALERT_REGIONS = ['policy', 'text', 'alert'];
+    const region = (name) => {
+      const at = source.indexOf(`// #region ${name}`);
+      const end = source.indexOf('// #endregion', at);
+      if (at < 0 || end < 0) return null;
+      return source.slice(at, end);
+    };
+    const pieces = ALERT_REGIONS.map(region);
+    const alertSource = pieces.every((piece) => piece !== null)
+      ? `${pieces.join('\n')}\nreturn { alert, alertPlan, peakState, startAlertClock, readAlertSettings, writeAlertSettings, notifySupport, closeToast, showToast, ALERT_CHOICES, ALERT_DEFAULT_MINUTES, TOAST_MS, get announcedKey() { return announcedKey; }, set announcedKey(value) { announcedKey = value; } };`
+      : null;
+    if (alertSource === null) {
+      fail(2, 'client.js no longer has extractable policy/text/alert regions, so the clock could not be driven. This says nothing about whether it is correct.');
+    }
+
+    const clock = { now: 0 };
+    // Passed in as a parameter so it shadows the real `Date` inside the extracted
+    // code: the clock has to be the test's, not the machine's.
+    class FakeDate extends Date {
+      constructor(...args) { if (args.length === 0) super(clock.now); else super(...args); }
+      static now() { return clock.now; }
+    }
+
+    const makeElement = (tag) => ({
+      tagName: String(tag).toUpperCase(), className: '', textContent: '', dataset: {},
+      attributes: {}, children: [], parentNode: null, listeners: {},
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      getAttribute(name) { return name in this.attributes ? this.attributes[name] : null; },
+      addEventListener(type, handler) { (this.listeners[type] = this.listeners[type] || []).push(handler); },
+      append(...kids) { for (const kid of kids) { kid.parentNode = this; this.children.push(kid); } },
+      removeChild(kid) {
+        const at = this.children.indexOf(kid);
+        if (at >= 0) { this.children.splice(at, 1); kid.parentNode = null; }
+      },
+    });
+    const textOf = (node) => `${node.textContent}${node.children.map(textOf).join('')}`;
+
+    const boot = () => {
+      const body = makeElement('body');
+      const document = { body, createElement: makeElement };
+      const store = new Map();
+      const sent = [];
+      function FakeNotification(title, options) { sent.push({ title, options }); }
+      FakeNotification.permission = 'default';
+      const window = {
+        localStorage: {
+          getItem: (key) => (store.has(key) ? store.get(key) : null),
+          setItem: (key, value) => { store.set(key, String(value)); },
+        },
+        Notification: FakeNotification,
+      };
+      const intervals = [];
+      const timeouts = [];
+      const timer = {
+        interval(fn, ms) { const entry = { fn, ms }; intervals.push(entry); return () => { const at = intervals.indexOf(entry); if (at >= 0) intervals.splice(at, 1); }; },
+        timeout(fn, ms) { const entry = { fn, ms }; timeouts.push(entry); return () => { const at = timeouts.indexOf(entry); if (at >= 0) timeouts.splice(at, 1); }; },
+      };
+      const api = new Function('window', 'document', 'ensureStyles', 'PACKAGE_ID', 'Date', alertSource)(
+        window, document, () => {}, '@tuoluosuan/dsh-peak-badge', FakeDate,
+      );
+      const ctx = { get: () => undefined };
+      return {
+        api, document, body, window, FakeNotification, sent, store, timer, intervals, timeouts, ctx,
+        toasts: () => (document.body === null ? [] : document.body.children.filter((node) => node.className === 'peak-badge-toast')),
+        tick: () => { for (const { fn } of [...intervals]) fn(); },
+        at: (y, m, d, hh, mm) => { clock.now = beijing(y, m, d, hh, mm); },
+      };
+    };
+
+    if (alertSource !== null) {
+      let live = null;
+
+      // One edge, told once. The clock fires every 30 s and the lead is two
+      // minutes, so a naive implementation announces the same boundary four times
+      // with a visibly shrinking number.
+      live = boot();
+      live.at(2026, 8, 19, 11, 58);
+      live.api.startAlertClock(live.ctx, live.timer);
+      check('the clock registers exactly one interval', String(live.intervals.length), '1');
+      check('the tick is TICK_MS apart', String(live.intervals[0].ms), '30000');
+      check('an edge two minutes out is announced at once', String(live.toasts().length), '1');
+      check('the notice names the boundary', String(live.toasts()[0].children.some((node) => textOf(node).includes('12:00'))), 'true');
+      check('the notice prints the remaining time, not just the boundary',
+        String(textOf(live.toasts()[0]).includes('2 分钟')), 'true');
+      for (let beat = 0; beat < 4; beat += 1) { clock.now += 30000; live.tick(); }
+      check('four more ticks do not repeat it', String(live.toasts().length), '1');
+      check('and it is still the same notice', String(live.toasts()[0].children.some((node) => textOf(node).includes('12:00'))), 'true');
+
+      // The next edge is a different edge.
+      clock.now = beijing(2026, 8, 19, 17, 59);
+      live.tick();
+      check('the evening edge is announced too', String(live.toasts().length), '1');
+      check('and it replaces the morning notice', String(textOf(live.toasts()[0]).includes('18:00')), 'true');
+      check('the morning notice is gone', String(textOf(live.toasts()[0]).includes('12:00')), 'false');
+
+      // The key carries the date, so yesterday's edge cannot silence today's.
+      live.api.announcedKey = '2026-08-19|0|12:00';
+      clock.now = beijing(2026, 8, 20, 11, 58);
+      live.tick();
+      check('yesterday\'s key does not silence today\'s edge', String(textOf(live.toasts()[0]).includes('12:00')), 'true');
+
+      // Off means off.
+      live = boot();
+      live.api.alert.leadMinutes = 0;
+      live.at(2026, 8, 19, 11, 58);
+      live.api.startAlertClock(live.ctx, live.timer);
+      for (let beat = 0; beat < 5; beat += 1) { clock.now += 30000; live.tick(); }
+      check('a lead of zero keeps the clock silent', String(live.toasts().length), '0');
+
+      // A missing body must leave the edge un-announced, not burn it: the client
+      // half can run before the document has one.
+      live = boot();
+      live.at(2026, 8, 19, 11, 58);
+      live.document.body = null;
+      live.api.startAlertClock(live.ctx, live.timer);
+      check('no body means nothing is said', String(live.toasts().length), '0');
+      // The assertion that matters: the edge is still un-announced, so the next
+      // tick gets to speak. Reading `toasts()` alone would pass here no matter what
+      // the clock did, because there is no body for a notice to land in.
+      check('and the edge is still un-announced', String(live.api.announcedKey), 'null');
+      live.document.body = live.body;
+      live.tick();
+      check('so the next tick gets to speak', String(live.toasts().length), '1');
+
+      // Auto-dismiss has to go through the timer service: a bare `setTimeout` is
+      // trapped in a client half, and the failure is a notice that never leaves.
+      check('auto-dismiss is booked on the timer service', String(live.timeouts.length), '1');
+      check('auto-dismiss waits TOAST_MS', String(live.timeouts[0].ms), String(live.api.TOAST_MS));
+      live.api.closeToast();
+      check('closing removes the notice', String(live.toasts().length), '0');
+      live.api.closeToast();
+      check('closing twice is harmless', String(live.toasts().length), '0');
+      check('closing clears the pending auto-dismiss', String(live.timeouts.length), '0');
+
+      // The preferences survive a restart, and a value the select cannot render is
+      // refused rather than trusted.
+      live = boot();
+      live.api.alert.leadMinutes = 15;
+      live.api.alert.notify = true;
+      live.api.writeAlertSettings();
+      live.api.alert.leadMinutes = live.api.ALERT_DEFAULT_MINUTES;
+      live.api.alert.notify = false;
+      live.api.readAlertSettings();
+      check('the lead survives a restart', String(live.api.alert.leadMinutes), '15');
+      check('the notification choice survives too', String(live.api.alert.notify), 'true');
+      live.store.set('@tuoluosuan/dsh-peak-badge/alert', '{"leadMinutes":3}');
+      live.api.alert.leadMinutes = 15;
+      live.api.readAlertSettings();
+      check('a lead outside the choices is ignored', String(live.api.alert.leadMinutes), '15');
+      live.store.set('@tuoluosuan/dsh-peak-badge/alert', 'not json');
+      live.api.readAlertSettings();
+      check('an unparseable preference is ignored', String(live.api.alert.leadMinutes), '15');
+
+      // The states of the notification row, each one the card has wording for.
+      live = boot();
+      live.window.Notification = undefined;
+      check('no Notification API reads as unsupported', live.api.notifySupport(), 'unsupported');
+      live = boot();
+      live.FakeNotification.permission = 'denied';
+      check('a refused permission reads as denied', live.api.notifySupport(), 'denied');
+      live.FakeNotification.permission = 'granted';
+      check('a granted permission reads as granted', live.api.notifySupport(), 'granted');
+      live.FakeNotification.permission = 'default';
+      check('an unasked permission reads as prompt', live.api.notifySupport(), 'prompt');
+
+      // The system notice only goes out when the user asked for it *and* the
+      // browser agreed. Either one alone is silence, and the in-page toast is not
+      // the system notice: it must survive both.
+      live = boot();
+      live.at(2026, 8, 19, 11, 58);
+      live.FakeNotification.permission = 'granted';
+      live.api.alert.notify = false;
+      live.api.startAlertClock(live.ctx, live.timer);
+      check('a granted permission alone raises no system notice', String(live.sent.length), '0');
+      check('but the in-page notice still goes out', String(live.toasts().length), '1');
+      live = boot();
+      live.at(2026, 8, 19, 11, 58);
+      live.FakeNotification.permission = 'default';
+      live.api.alert.notify = true;
+      live.api.startAlertClock(live.ctx, live.timer);
+      check('the preference alone raises no system notice', String(live.sent.length), '0');
+      check('the in-page notice goes out anyway', String(live.toasts().length), '1');
+      live = boot();
+      live.at(2026, 8, 19, 11, 58);
+      live.FakeNotification.permission = 'granted';
+      live.api.alert.notify = true;
+      live.api.startAlertClock(live.ctx, live.timer);
+      check('both together raise one system notice', String(live.sent.length), '1');
+      check('the system notice is tagged with the boundary',
+        String(live.sent[0].options.tag.includes('2026-08-19')), 'true');
+    }
+  }
+
   console.log(`\n${passed} passed, ${failed} failed`);
   // A floor, not just `failed > 0`: a section that stops running entirely would
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 111;
+  const FLOOR = 165;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;

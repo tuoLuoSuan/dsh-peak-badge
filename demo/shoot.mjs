@@ -84,6 +84,12 @@ const SHOTS = [
   { page: '_shot.html', file: 'card-off.png', query: '?view=card&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card', scale: 4 },
   { page: '_shot.html', file: 'card-peak.png', query: '?view=card&state=peak&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card', scale: 4 },
   { page: '_shot.html', file: 'card-en.png', query: '?view=card&lang=en&theme=light', clip: '.peak-badge-root', union: '.peak-badge-card', scale: 4 },
+  // The pre-switch notice. It is `position: fixed`, so it is measured in viewport
+  // coordinates and the page must not be scrolled — which is why it gets its own
+  // page rather than being photographed on top of a card shot.
+  { page: '_shot.html', file: 'alert-off.png', query: '?view=toast&theme=light', clip: '.peak-badge-toast', scale: 3 },
+  { page: '_shot.html', file: 'alert-peak.png', query: '?view=toast&state=peak&theme=light', clip: '.peak-badge-toast', scale: 3 },
+  { page: '_shot.html', file: 'alert-peak-dark.png', query: '?view=toast&state=peak&theme=dark', clip: '.peak-badge-toast', scale: 3 },
 ];
 
 const wait = (ms) => new Promise((done) => setTimeout(done, ms));

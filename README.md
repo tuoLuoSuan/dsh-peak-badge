@@ -22,6 +22,31 @@
 |---|---|---|
 | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/card-off.png" width="312" alt="卡片：中文空闲"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/card-peak.png" width="312" alt="卡片：中文高峰"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/card-en.png" width="312" alt="卡片：英文"> |
 
+还差几分钟要切换时，右下角会主动弹一条，不用你去点开卡片：
+
+| 要进高峰了 | 要进空闲了 | 深色主题 |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/alert-peak.png" width="312" alt="提醒：即将进入高峰"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/alert-off.png" width="312" alt="提醒：即将进入空闲"> | <img src="https://raw.githubusercontent.com/tuoLuoSuan/dsh-peak-badge/main/docs/alert-peak-dark.png" width="312" alt="提醒：深色"> |
+
+## 切换前提醒
+
+这是在给「你正在写一个长提示词」这种情况准备的。
+
+费率是在**请求发出去的那一刻**定下来的，不是完成的时候。所以「还有两分钟就要翻倍了」
+是一句现在还有用的话，而「刚刚翻倍了」已经晚了。卡片里的倒计时只有点开才看得见。
+
+- 提前量在卡片里选：关闭 / 1 / 2 / 5 / 10 / 15 / 30 分钟，**默认 2 分钟**。
+- 每个切换点**只说一次**。判定的键是**边界本身**（北京日期 + 天偏移 + 钟点），
+  不是「我什么时候注意到的」——时钟 30 秒跳一次，两分钟的提前量会被看到四次，
+  键不稳就会连播四次，而且数字一次比一次小。
+- 两个方向都说：要进高峰了（要发就趁现在）和要进空闲了（不急就等一下）。
+- 说过的边界不再重说，**换会话、切页面、重新挂载都不会再说一遍**。时钟绑在插件上而不是
+  胶囊上，因为胶囊只在会话页存在，而「你正在看别的地方、准备起一个长任务」恰恰是最需要
+  知道的时候。
+- 可选**系统通知**。勾上时浏览器会问一次权限；权限被拒或者这个环境根本没有这个 API 时，
+  卡片会写明是哪一种，而不是摆一个按了没反应的勾选框。
+- 提醒本身**不改变任何计费行为，也不拦任何请求**。
+
 ## 计费规则
 
 来自 [DeepSeek 官方定价页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)：
@@ -114,6 +139,20 @@ node verify-policy.mjs
 这一段就是为了堵这个缝，并且额外盯住 `dateText` / `weekday` / `schedule` 三个
 别的断言都没碰过的字段。
 
+再往后是**切换前提醒**的两段。先是 `alertPlan`——纯函数，验什么时候该说话、什么时候该闭嘴、
+以及「同一条边界」的键到底稳不稳（时钟 30 秒一跳、提前量 2 分钟，键不稳就会连说四次）。
+
+然后是本文件里唯一一段**带状态**的验证：把 `#region policy` + `#region text` + `#region alert`
+三段一起抠出来，配一个**能手动走的时钟**和一个几十行的假 DOM，真的把时钟跑起来。
+验的是纯函数验不到的东西——一条边界只播一次、再跳四拍还是同一条通知、下一个边界会替换掉
+上一条、昨天的键不会让今天的边界闭嘴、提前量设成 0 就彻底安静、`document.body` 还没建好时
+**不消耗**那一次发言机会、自动消失走的是 `timer.timeout` 而不是被客户端的半场禁掉的裸
+`setTimeout`、偏好存得下也读得回、`{"leadMinutes":3}` 这种 select 画不出来的值被拒绝、
+系统通知要「用户勾了」**且**「浏览器给了权限」两个条件同时成立才发。这一段曾经抓到过一个真
+的时序依赖：`showToast` 靠一个由 `apply` 赋值的模块级变量拿定时器，而赋值在
+`startAlertClock` 后面——第一次播报（同步发生的）就没有自动消失。现在
+`startAlertClock` 自己认领那个定时器，顺序不再能被写反。
+
 时区这件事值得单说：DSH 跑在用户本机时区上，而答案永远是北京时间的。这条不靠推理，
 上面有一组专门的断言，并且整个文件可以在别的时区下重跑（`TZ` 环境变量 Node 会读）：
 
@@ -124,12 +163,12 @@ TZ=Asia/Shanghai        node verify-policy.mjs
 TZ=Pacific/Kiritimati   node verify-policy.mjs
 ```
 
-四个时区都是 111 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
+四个时区都是 165 条全过。把 `peakState` 里的 `getUTC*` 换成 `get*`（一个很自然的
 「简化」），这套断言立刻挂。验证过，不是推测。
 
 退出码按本工作区的约定分三种：`0` 全过，`1` 有断言挂了（**代码错了**），
 `2` 根本没跑起来（与代码无关）。加了 `--dump` 会把抠出来的那段代码印出来。
-最后还压了一条底线：跑过的条数少于预期（现在是 111）也一样按 1 退出，
+最后还压了一条底线：跑过的条数少于预期（现在是 165）也一样按 1 退出，
 否则「某个小节整段没跑」会打印成「0 passed, 0 failed」然后安安静静地返回 0。
 
 > 关于这套断言的可信度：写它的时候，我**手算的期望值错了六次，机器每次都对**。
@@ -195,26 +234,42 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 `@tuoluosuan/dsh-peak-badge` 这种模块名。`exports` 里必须放开 `./locale/*.json`，
 否则平台的解析器拿不到它（`exports` 是白名单）。
 
-`client.js` 用 `#region` 分成四段：`policy`（纯函数，可单独抠出来执行）、
-`styles`、`text`（语言表与两个格式化函数）、`view`（React）。
-其中 `#region policy` / `#region text` 的边界是 `verify-policy.mjs` 依赖的约定，
-改结构时别把它们删了。
+`client.js` 用 `#region` 分成五段：`policy`（纯函数，可单独抠出来执行）、
+`styles`、`text`（语言表与两个格式化函数）、`alert`（切换前提醒的时钟与那条通知）、
+`view`（React）。
+其中 `#region policy` / `#region text` / `#region alert` 的边界是 `verify-policy.mjs`
+依赖的约定，改结构时别把它们删了。
 
 判定与文案是分开的：`peakState` 只返回**键和数字**（`reason: 'makeup'`、
 `next: { at, inDays, leftMinutes }`），句子在 `#region text` 里拼。
 这条边界就是 `verify-policy.mjs` 能单独执行这两段的原因：一旦 policy 里出现
 `text.xxx`，验证脚本会立刻抛 `ReferenceError`（真发生过一次）。
 
+`#region alert` 是唯一一段**有状态**的代码（`announcedKey`、当前那条通知的节点、
+它自己的定时器），所以它也是唯一一段需要**配一个假 DOM 真的跑起来**才能验的。
+它刻意不碰 React：那条通知要在胶囊没挂载的时候也能弹出来，所以它是纯 DOM 建的。
+
 ## 不能改坏的六件事
 
 1. **时间只能从 `ctx.get('timer')` 拿。** 反复执行的东西走
    `ctx.get('timer').interval(cb, ms)`，一次性延时走 `timeout`；两种都返回 disposer。
-   定时器要在 `React.useEffect` 里创建、把 disposer 当清理函数交回去。
    服务查询和 `interval()` 都要包在 `try` 里，上下文一旦销毁，`ctx.effect`
    会抛 `INACTIVE_EFFECT`，而卸载和销毁本来就是会撞车的。
    别改用全局 `setTimeout`：动态客户端包里它是会抛错的陷阱（`client.js:9-11` 记的就是
    这条），而且即使在这里能用，它也不跟页面生命周期绑定，卸载后会继续跑。同理，语言切换
    靠的是 `locale.subscribe`（`client.js:612-634`），不是重新加载。
+
+   **在哪里创建，取决于这个定时器是给谁用的。** 胶囊自己的那两个（刷新状态、刷新倒计时）
+   建在 `React.useEffect` 里，disposer 当清理函数交回去。**切换前提醒的时钟不是**：
+   它建在 `apply` 的 `ctx.effect` 里，命绑在插件上。因为胶囊只挂在
+   `conversation.input.left` 槽位上，也就是只有会话页存在时才在——而「用户正在看设置页、
+   准备起一个长任务」恰恰是最需要那条提醒的时候。把它挪进组件的 effect 会让提醒在最需要
+   它的场景里恰好消失，而且换个会话就会把「这条边界已经说过了」忘掉一次。
+
+   顺带一条时序约束：那条通知的自动消失（`timer.timeout(closeToast, TOAST_MS)`）用的定时器
+   是 `startAlertClock` **自己认领**的，不是调用方先赋好再调它。因为 `startAlertClock`
+   会在返回前**同步**播报一次，调用方若在它之后才赋值，第一次播报就没有自动消失——
+   一条永远不走的通知。验证脚本就是靠这个抓到的。
 
 2. **周几要按「那一刻」算，不能按「那一天」算。** 北京时间的周五 18:00 之后就是谷时，
    一直谷到周一早上；如果周几取自当天日期，周五晚上就会被算成工作日峰时。
@@ -236,8 +291,11 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
    现在的做法是在 `document` 上捕获阶段听 `pointerdown`（`client.js:697-705`），
    判断依据是 `ref: rootRef` 那个根节点（`client.js:708`）。
    捕获阶段是故意的：卡片内部若有处理器 `stopPropagation`，冒泡阶段就收不到。
-   在这里卸载卡片是安全的——卡片本身没有可点的东西，而且 `pointerdown` 早于
-   卡内按钮需要的 mouseup。`onBlur` 保留下来只管键盘：焦点移到真正的兄弟节点时收起来，
+   在这里卸载卡片是安全的，靠的是 `root.contains(event.target)` 那道包含判断：
+   卡片现在**是有可点的东西的**（提前量那个 `<select>`、通知那个勾选框），它们都长在根节点
+   里面，所以按它们不会关卡片；按卡片外面的正文或输入框背景才关。这条判断现在是必需的——
+   在 `<select>` 上按下 `pointerdown` 会展开原生菜单，此时把卡片拆掉，看起来就和这个控件坏了
+   一样。`onBlur` 保留下来只管键盘：焦点移到真正的兄弟节点时收起来，
    `relatedTarget === null`（焦点离开文档）那条路已经由指针监听器先一步处理了。
 
 6. **胶囊和卡片的底色必须是不透明色，而且必须读静态色板。** 壁纸插件
@@ -303,7 +361,14 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 
 胶囊是一个真的 `<button>`：`aria-expanded` / `aria-controls` / `aria-haspopup="dialog"`，
 `title` 里带完整状态；卡片是 `role="dialog"`；圆点本身是 `aria-hidden`（颜色只是重复文字）。
-键盘：Tab 能聚焦，Escape 关卡片。因为它在输入行里、不在 `aria-hidden` 子树里，
+键盘：Tab 能聚焦，Escape 关卡片，卡片里那两个设置（提前量、系统通知）都是原生控件，
+Tab 能走到、方向键能改，并且它们的 `<label>` 都带 `for`。
+
+那条提醒是 `role="status"` 而**不是** `role="alert"`：值得瞟一眼，不值得打断正在打的字。
+它的关闭按钮有 `aria-label`。系统通知只在用户勾了、且浏览器给了权限时才发——这两条
+任何一条不成立，卡片会写明是哪一种，而不是摆一个按了没反应的勾选框。
+
+因为它在输入行里、不在 `aria-hidden` 子树里，
 所以不需要额外的屏幕阅读器播报区（有些同类插件需要，是因为它们把徽章放进了品牌行）。
 
 ## 和别的同类插件比
@@ -314,6 +379,13 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 - 这里点开是**卡片**（有的同类是悬停 tooltip 或只切换显示档位）
 - 这里会写出**节假日的名字**（春节 / 国庆节），不只是「法定节假日」
 - 这里**跨年会明确说不知道**，而不是猜
+- 这里有一条**切换前提醒**，而且提前量可调
+
+提醒这件事上要说清楚：[dsh-cost-meter](https://www.npmjs.com/package/dsh-cost-meter)
+做得比这里多得多——它有峰谷切换的全页弹窗、可调 1–30 分钟的提前量、倒计时轨、
+26 周日格热力图，还会**去抓官方定价页解析价格表与生效时间**。这个插件只有那条通知和
+卡片里的倒计时。两者不冲突：装上它之后，这个胶囊的价值主要在「一眼看到档位」而不是
+「提醒你切换」，因为提醒那块确实是人家的主场。
 
 参考过的项目：[AK-blank/dsh-plugin-offpeak-badge](https://github.com/AK-blank/dsh-plugin-offpeak-badge)、
 [dsh-peak-badge](https://www.npmjs.com/package/dsh-peak-badge)、
@@ -325,7 +397,14 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 分两段验很自然，两段本来就能各自单独执行，但它有个盲点：**缝上的错两边都看不见**。
 policy 交出 `reasonParams`，text 拿模板去填；分开验时两边喂的都是手写的假数据，
 所以把 `{ name: holiday }` 改名、或者在 `REASON_ZH` 里把 `{name}` 打错，
-八十多条断言照样全绿，而卡片上印的是字面量 `{name}`。
+一百多条断言照样全绿，而卡片上印的是字面量 `{name}`。
+
+同一个盲点还有第三种形态，而且更难看见：**两段都对，接线错了**。
+`alertPlan` 能算出「该说话了」，`showToast` 能把通知画出来，各自都验得过——
+但把「算出来的那一个」交给「画出来的那一个」的那个人写错了，谁都不会红。
+所以 `#region alert` 那一段不是分开验的，是**整条跑起来**的：真的把时钟点着、
+真的跳几拍、真的去假 DOM 里数那几条通知。它就是这么抓到那个时序 bug 的
+（第一次播报没有自动消失，因为定时器是调用方在播报之后才赋的值）。
 
 所以 `verify-policy.mjs` 末尾有一段用**同一个 `new Function`**（先 policy 后 text）
 把整条路走一遍：`reasonSentence(peakState(那一刻))`，再顺手扫一遍所有可能出现的理由键，
@@ -344,10 +423,13 @@ node demo/shoot.mjs
 `#region styles` 里**切出来的真 CSS**（连主题令牌都换成了官方主题里解析出来的值）。
 `demo/shoot.mjs` 用无头 Edge 打开它，按元素裁剪，写进 `docs/`。
 
-胶囊只有 52 css px 宽，所以它的截图按 6 倍像素渲染（卡片 4 倍），放进 README 里再放大也
-不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片在 README 里显示成
-300 px（胶囊）和 312 px（卡片），这两个数字也是写在 `<img>` 标签上的：Markdown 的
+胶囊只有 52 css px 宽，所以它的截图按 6 倍像素渲染（卡片 4 倍，提醒条 3 倍），放进 README 里
+再放大也不糊。每张图的倍率写在 `demo/shoot.mjs` 的 `SHOTS` 里。图片在 README 里显示成
+300 px（胶囊）和 312 px（卡片与提醒条），这两个数字也是写在 `<img>` 标签上的：Markdown 的
 `![]()` 语法带不了 `width`，所以这里用的是 HTML。
+
+提醒条是 `position: fixed`，量到的是**视口坐标**，所以它拿的是单独一张页面
+（`?view=toast`）、不是在卡片那张上面叠着拍——页面一旦滚动，两者就对不上了。
 
 `src` 写的是 `https://raw.githubusercontent.com/...` 的绝对地址，不是 `docs/chip.png`
 这种相对路径。相对路径其实也能显示——npm 会拿 `repository` 字段去 GitHub 上找图
