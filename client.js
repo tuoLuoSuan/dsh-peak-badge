@@ -239,22 +239,6 @@ window.__ModuleLoader__.load({
       const dateText = formatCivilDate(nowMs + CHINA_UTC_OFFSET_MS);
       const schedule = PEAK_WINDOWS.map(([open, close]) => `${hhmm(open)}–${hhmm(close)}`).join(' · ');
 
-      if (!HOLIDAY_COVERAGE.includes(year)) {
-        // Years the table does not cover get a third, honest posture instead of
-        // a guess dressed as a verdict.
-        return {
-          status: 'unknown', dateText, weekday, schedule,
-          reason: 'tableExhausted',
-          reasonParams: { latest: LATEST_COVERED_YEAR, year },
-        };
-      }
-
-      const entry = holidayLookup(year, month, day);
-      const holiday = entry === undefined ? undefined : entry.name;
-      // Asked separately from `holidayLookup`: a 调休 workday is by definition not
-      // a statutory holiday, so it never appears in that lookup — it is the one
-      // case where "the official rule counts the weekday" needs saying out loud.
-      const isMakeup = isMakeUpDay(year, month, day);
       const isWeekend = weekday === 0 || weekday === 6;
 
       /** One shape for every off-peak verdict; only the reasoning differs. */
@@ -284,6 +268,30 @@ window.__ModuleLoader__.load({
           next,
         };
       };
+
+      // The table stopping early removes the answer only for days whose verdict
+      // actually depends on it. A statutory holiday's does; a weekend's does not
+      // — the official wording names weekends off-peak in full, with no reference
+      // to any year's notice, and this plugin already lets the weekend rule win
+      // over a 调休 make-up workday (see `makeup` below). So a Saturday beyond the
+      // table is still a confident 谷时, and only weekdays fall back to the third,
+      // honest posture. `offPeakReach` stops on the same boundary, so the card
+      // says the rate without inventing a next switch it cannot know.
+      if (!HOLIDAY_COVERAGE.includes(year)) {
+        if (isWeekend) return offPeak('weekendUncovered', { weekday }, 'allDayOff');
+        return {
+          status: 'unknown', dateText, weekday, schedule,
+          reason: 'tableExhausted',
+          reasonParams: { latest: LATEST_COVERED_YEAR, year },
+        };
+      }
+
+      const entry = holidayLookup(year, month, day);
+      const holiday = entry === undefined ? undefined : entry.name;
+      // Asked separately from `holidayLookup`: a 调休 workday is by definition not
+      // a statutory holiday, so it never appears in that lookup — it is the one
+      // case where "the official rule counts the weekday" needs saying out loud.
+      const isMakeup = isMakeUpDay(year, month, day);
 
       // Every off-peak instant routes through the same day-walk. Doing it here
       // rather than with a special case per gap is what keeps the noon break
@@ -615,6 +623,7 @@ body[data-ds-dark-theme] .peak-badge-select { background: var(--dsw-static-neutr
       schedule: '高峰时段',
       pending: '待定',
       beyondHorizon: '一年内没有可判断的高峰时段',
+      nextBeyondTable: '表外的年份，无法判断下一个高峰',
       clockError: '无法读取本机时钟。',
       hour: '小时',
       minute: '分钟',
@@ -650,6 +659,7 @@ body[data-ds-dark-theme] .peak-badge-select { background: var(--dsw-static-neutr
       schedule: 'Peak hours',
       pending: 'Unknown',
       beyondHorizon: 'No assessable peak window within a year',
+      nextBeyondTable: 'a year beyond the table — the next peak cannot be determined',
       clockError: 'The local clock could not be read.',
       hour: 'h',
       minute: 'min',
@@ -686,6 +696,7 @@ body[data-ds-dark-theme] .peak-badge-select { background: var(--dsw-static-neutr
       workingDayOff: '工作日非高峰时段，当前按空闲时段计价。',
       peakWorkday: '工作日高峰时段，当前按标准价计价。',
       tableExhausted: '节日表只到 {latest} 年，{year} 年的法定节假日无从判断。',
+      weekendUncovered: '{weekday}；官方规则里周末不查节假日表',
     };
     const REASON_EN = {
       holiday: 'statutory holiday: {name}',
@@ -695,6 +706,7 @@ body[data-ds-dark-theme] .peak-badge-select { background: var(--dsw-static-neutr
       workingDayOff: 'off-peak window on a working day, currently billed at the off-peak rate.',
       peakWorkday: 'peak window on a working day, currently billed at the standard rate.',
       tableExhausted: 'the holiday table only reaches {latest}, so the statutory holidays of {year} cannot be determined.',
+      weekendUncovered: '{weekday}; the official rule names weekends off-peak without consulting the holiday table',
     };
     const REASON = { zh: REASON_ZH, en: REASON_EN };
     // The active language lives in a mutable holder rather than in a closing-over
@@ -1160,15 +1172,19 @@ body[data-ds-dark-theme] .peak-badge-select { background: var(--dsw-static-neutr
       const label = status === 'peak' ? text.peak : status === 'off' ? text.off : text.unknown;
       const rate = status === 'unknown' ? null : text[state.discount] || state.discount;
       // `next` is absent only when the day-walk found no peak window it is
-      // willing to name: either the year is not covered by the holiday table, or
-      // the walk hit its own horizon. Both are "not within the next year", never
+      // willing to name. Two different reasons hide behind that one absence and
+      // they are not interchangeable: a year outside the holiday table means the
+      // question cannot be answered at all, while the walk hitting its own
+      // horizon means the answer is "not within the next year". Both are never
       // "the next workday" — on weekends and holidays the whole day is off-peak,
       // so the next peak is by definition a later day.
-      const nextText = state.next === undefined
-        ? (status === 'off' ? text.beyondHorizon : text.pending)
-         : i18n.lang === 'en'
+      const nextText = state.next !== undefined
+        ? (i18n.lang === 'en'
           ? `${dayOffsetLabel(state.next.inDays)} ${state.next.at} (${formatGap(state.next.leftMinutes)})`
-          : `${dayOffsetLabel(state.next.inDays)} ${state.next.at}（${formatGap(state.next.leftMinutes)}）`;
+          : `${dayOffsetLabel(state.next.inDays)} ${state.next.at}（${formatGap(state.next.leftMinutes)}）`)
+        : status !== 'off'
+          ? text.pending
+          : state.reason === 'weekendUncovered' ? text.nextBeyondTable : text.beyondHorizon;
 
       /**
        * Close the card when the pointer goes down anywhere outside it.

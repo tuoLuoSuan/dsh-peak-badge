@@ -202,6 +202,26 @@ if (policy !== undefined) {
   check('with both years as parameters', `${unknown.reasonParams.latest}/${unknown.reasonParams.year}`, '2026/2027');
   check('and an uncovered year cannot be walked into a peak', shape(peakState(beijing(2027, 1, 6, 10, 0))), 'unknown | — | — | tableExhausted(2026/2027)');
 
+  // The table stopping early only removes the days whose verdict *depends* on it.
+  // 2027-01-02 is a Saturday, and the official wording names weekends off-peak in
+  // full — with no reference to any year's notice — so this one is still a
+  // confident verdict. Getting this wrong in the safe direction (saying 未知 for a
+  // day the plugin can actually answer) is still wrong: it is the difference
+  // between "I don't know" and "I do know and it is 谷时", and the card prints it.
+  const uncoveredSaturday = peakState(beijing(2027, 1, 2, 10, 0));
+  check('Sat 2027-01-02 is still a confident off-peak', uncoveredSaturday.status, 'off');
+  check('through the weekend rule, not the holiday table', uncoveredSaturday.reason, 'weekendUncovered');
+  check('billed at the off-peak rate', uncoveredSaturday.discount, 'rateOffPeak');
+  check('with the whole day named off-peak', uncoveredSaturday.tail, 'allDayOff');
+  check('and the weekday still carried for the sentence', String(uncoveredSaturday.reasonParams.weekday), '6');
+  check('Sun 2027-01-03 too', shape(peakState(beijing(2027, 1, 3, 10, 0))), `off | — | ${OFF} | weekendUncovered(0) + allDayOff`);
+  // No next switch is invented: 2027-01-04 could be a holiday nobody has announced
+  // yet, so the walk stops on the same boundary the weekday verdict does.
+  check('and no next switch is invented for it', String(uncoveredSaturday.next), 'undefined');
+  check('Mon 2027-01-04 still refuses to guess', peakState(beijing(2027, 1, 4, 10, 0)).status, 'unknown');
+  check('Tue 2027-01-05 too', peakState(beijing(2027, 1, 5, 10, 0)).status, 'unknown');
+  check('a covered-year weekend is unaffected', shape(peakState(beijing(2026, 8, 22, 10, 0))), `off | 2 09:00 2820min | ${OFF} | weekend(6) + allDayOff`);
+
   // ---------------------------------------------------------------------------
   // The text region: the formatters and the language switch.
   //
@@ -323,6 +343,7 @@ if (policy !== undefined) {
           check('end to end: 调休 says the rule out loud', sayZh(2026, 5, 9, 10, 0), '调休上班日，但官方规则按周几算，周末一律空闲（周六），全天按空闲时段计价。');
           check('end to end: a peak window', sayZh(2026, 8, 19, 9, 30), '工作日高峰时段，当前按标准价计价。');
           check('end to end: an uncovered year fills both years', sayZh(2027, 1, 6, 10, 0), '节日表只到 2026 年，2027 年的法定节假日无从判断。');
+          check('end to end: an uncovered weekend still answers', sayZh(2027, 1, 2, 10, 0), '周六；官方规则里周末不查节假日表，全天按空闲时段计价。');
           check('end to end: no placeholder is ever left unfilled', (() => {
             // A sweep over every reason the policy can produce: if a template and
             // its reasonParams ever disagree, `{...}` shows up here.
@@ -330,7 +351,7 @@ if (policy !== undefined) {
             const leaked = [
               [2026, 8, 19, 9, 30], [2026, 8, 19, 12, 30], [2026, 8, 19, 20, 0],
               [2026, 8, 22, 10, 0], [2026, 5, 9, 10, 0], [2026, 2, 17, 10, 0],
-              [2026, 10, 1, 10, 0], [2027, 1, 6, 10, 0],
+              [2026, 10, 1, 10, 0], [2027, 1, 6, 10, 0], [2027, 1, 2, 10, 0],
             ]
               .map(([y, m, d, hh, mm]) => api.reasonSentence(api.peakState(beijing(y, m, d, hh, mm))))
               .filter((sentence) => /\{\w+\}/.test(sentence));
@@ -842,7 +863,7 @@ if (policy !== undefined) {
   // otherwise print "0 passed, 0 failed" and exit 0 — the loudest possible
   // silence. Raise it when cases are added; lowering it is the one edit that can
   // quietly disarm this tripwire, so do that only on purpose.
-  const FLOOR = 165;
+  const FLOOR = 176;
   if (passed < FLOOR && failed === 0) {
     console.error(`only ${passed} cases ran, below the expected floor of ${FLOOR} — a section has stopped running.`);
     process.exitCode = 1;
