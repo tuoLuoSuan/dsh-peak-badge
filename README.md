@@ -1,4 +1,4 @@
-﻿# dsh-peak-badge
+# dsh-peak-badge
 
 点一下就知道现在 DeepSeek 是按**高峰价**还是**空闲价**计费。
 
@@ -41,7 +41,9 @@
 
 需要 DSH（DeepSeek Harness）。开发和验证是在 `@deepseek-ai/dsh@0.2.0-rc.2` 上做的。
 
-**方式一：直接从仓库装**（推荐，跟着 `main` 分支走，不经过 npm）
+### 从仓库装
+
+跟着 `main` 分支走，不经过 npm，推荐。
 
 ```
 dsh plugin --profile desktop add github:tuoLuoSuan/dsh-peak-badge
@@ -49,21 +51,23 @@ dsh plugin --profile desktop add github:tuoLuoSuan/dsh-peak-badge
 
 profile 名就是侧栏「工作区」对应的那个（桌面端默认 `desktop`）。
 
-**方式二：装 npm 上的版本**
+### 装 npm 上的版本
 
 ```
 dsh plugin --profile desktop add @tuoluosuan/dsh-peak-badge
 ```
 
-npm 上那份跟这个仓库同源，但不会自动跟着 `main` 走——想拿到新版本得等下一次发布。
+npm 上那份跟这个仓库同源，但不会自动跟着 `main` 走，想拿到新版本得等下一次发布。
 
-**方式三：在对话里让 DSH 自己装**
+### 在对话里让 DSH 自己装
 
 ```
 plugin_manager action: install_bundle target: github:tuoLuoSuan/dsh-peak-badge
 ```
 
-**方式四：本地开发**（克隆下来直接指目录）
+### 本地开发
+
+克隆下来直接指目录：
 
 ```
 plugin_manager action: install_bundle target: D:\path\to\dsh-peak-badge
@@ -71,7 +75,7 @@ plugin_manager action: install_bundle target: D:\path\to\dsh-peak-badge
 
 `target` 接受包名（可带版本）、git 地址、tarball 或本地绝对路径。
 
-装完刷新页面。**替换已装版本需要重启**才能加载新代码（热加载只覆盖新装的 bundle）。
+装完刷新页面。替换已装版本需要重启才能加载新代码（热加载只覆盖新装的 bundle）。
 
 ### 装不上或者想卸载
 
@@ -110,7 +114,7 @@ node verify-policy.mjs
 这一段就是为了堵这个缝，并且额外盯住 `dateText` / `weekday` / `schedule` 三个
 别的断言都没碰过的字段。
 
-**时区**：DSH 跑在用户本机时区上，而答案永远是北京时间的。这条不靠推理，
+时区这件事值得单说：DSH 跑在用户本机时区上，而答案永远是北京时间的。这条不靠推理，
 上面有一组专门的断言，并且整个文件可以在别的时区下重跑（`TZ` 环境变量 Node 会读）：
 
 ```
@@ -265,16 +269,18 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 
 ## 两个踩过的渲染坑
 
-**颜色别用 `--dsw-alias-state-idle-primary`。** 它在浅色主题下是 `--dsw-static-neutral-300`，
-也就是 **#d4d4d4**，那是画边框用的灰，1.2:1，在白底输入行里几乎看不见（第一版就是这样，
-被用户抓到了）。谷时/未知改用 `--dsw-alias-label-secondary`（中性蓝灰 #61666b，约 5.0:1），
-它在浅色和深色主题下都跟着走。
+### 颜色别用 `--dsw-alias-state-idle-primary`
 
-**圆点要显式写 `corner-shape: round`。** 主题装了一条全局规则
-`*, :before, :after { corner-shape: var(--dsw-corner-shape) }`，而那个变量是
-`superellipse(1.5)`（`dsh-client-ui-theme/lib/client.js:1145`）。在支持的浏览器里，
-一个 6px 的 `border-radius: 50%` 方块不会被这个规则收成圆：超椭圆在 6px 上边是平的，
-**它渲染成一个圆角方块**。放大 10 倍渲染两种写法对比过：只有显式 `round` 才是正圆。
+它在浅色主题下是 `--dsw-static-neutral-300`，也就是 `#d4d4d4`。那是画边框用的灰，
+1.2:1，在白底输入行里几乎看不见（第一版就是这样，被用户抓到了）。谷时/未知改用
+`--dsw-alias-label-secondary`（中性蓝灰 #61666b，约 5.0:1），它在浅色和深色主题下都跟着走。
+
+### 圆点要显式写 `corner-shape: round`
+
+主题装了一条全局规则 `*, :before, :after { corner-shape: var(--dsw-corner-shape) }`，
+而那个变量是 `superellipse(1.5)`（`dsh-client-ui-theme/lib/client.js:1145`）。在支持的
+浏览器里，一个 6px 的 `border-radius: 50%` 方块不会被这个规则收成圆：超椭圆在 6px 上
+边是平的，它渲染成一个圆角方块。放大 10 倍渲染两种写法对比过：只有显式 `round` 才是正圆。
 不支持的引擎会忽略这条声明，所以可以无条件留着。主题自己的文档里也写了这条要求
 （`dsh-client-ui-theme/README.zh.md:76`：正圆形状「须在所属组件样式表中把
 `corner-shape: round` 与半径声明配对」）。
