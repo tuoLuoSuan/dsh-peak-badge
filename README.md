@@ -79,7 +79,7 @@ profile 名就是侧栏「工作区」对应的那个（桌面端默认 `desktop
 ### 装 npm 上的版本
 
 ```
-dsh plugin --profile desktop add @tuoluosuan/dsh-peak-badge@0.1.2
+dsh plugin --profile desktop add @tuoluosuan/dsh-peak-badge@0.1.3
 ```
 
 npm 上那份跟这个仓库同源，但不会自动跟着 `main` 走，想拿到新版本得等下一次发布。
@@ -87,6 +87,22 @@ npm 上那份跟这个仓库同源，但不会自动跟着 `main` 走，想拿�
 版本号是故意写上的。pnpm 11 内置一个 24 小时的发版冷却期（`minimumReleaseAge`），这段时间里
 **裸包名不解析到 `latest`**，而是解析到冷却期之外最新的那一版——命令照样成功、照样打印一行 `+`，
 只是装到的是上一版。0.1.2 刚发布时跑裸包名，装到的是 0.1.1。
+
+### 这一份装得上吗
+
+```
+node docs/probe-npm-install.mjs
+```
+
+在一个一次性的 profile 里真的装一遍，装的就是 `package.json` 里钉住的那一版，然后回答这个仓库
+自己回答不了的三个问题：宿主有没有把它当插件收下、装进去的是不是你要发的那一版、以及那个包名在
+三个地方是不是同一个。
+
+最后一个值得多说一句。宿主是从 `cordis.patch.yml` 里学到这个包叫什么名字的，而那份补丁里的名字
+和 `package.json` 里的名字**没有任何东西在比对**：写错一个字母，安装照样成功、注册照样成功、
+插件永远不加载。所以这里把两份名字读出来对一遍，顺带确认 `dsh.client.inject` 声明的依赖不是空的。
+
+找不到 `dsh` 会以退出码 2 结束并列出它找过的路径，`PEAK_BADGE_DSH_CLI` 可以指定。
 
 ### 在对话里让 DSH 自己装
 
@@ -241,6 +257,7 @@ TZ=Pacific/Kiritimati   node verify-policy.mjs
 | `index.js` | 宿主半边，空的 |
 | `client.js` | 全部功能：策略 + 渲染 |
 | `verify-policy.mjs` | 上面那个能跑的证明 |
+| `docs/probe-npm-install.mjs` | 在一个一次性 profile 里真的装一遍（`node docs/probe-npm-install.mjs`） |
 | `demo/` | 截图用的页面与渲染脚本（`node demo/shoot.mjs`），产物在 `docs/` |
 | `locale/{en,zh}.json` | 插件列表里显示的名字和说明（`meta.title` / `meta.description`） |
 | `icon.svg` | 插件列表里的图标，`currentColor`，跟随主题 |
