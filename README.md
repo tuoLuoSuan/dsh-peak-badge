@@ -79,10 +79,14 @@ profile 名就是侧栏「工作区」对应的那个（桌面端默认 `desktop
 ### 装 npm 上的版本
 
 ```
-dsh plugin --profile desktop add @tuoluosuan/dsh-peak-badge
+dsh plugin --profile desktop add @tuoluosuan/dsh-peak-badge@0.1.2
 ```
 
 npm 上那份跟这个仓库同源，但不会自动跟着 `main` 走，想拿到新版本得等下一次发布。
+
+版本号是故意写上的。pnpm 11 内置一个 24 小时的发版冷却期（`minimumReleaseAge`），这段时间里
+**裸包名不解析到 `latest`**，而是解析到冷却期之外最新的那一版——命令照样成功、照样打印一行 `+`，
+只是装到的是上一版。0.1.2 刚发布时跑裸包名，装到的是 0.1.1。
 
 ### 在对话里让 DSH 自己装
 
